@@ -101,6 +101,7 @@ const STORE_KEY='toggle.expirations.v1';
 const plugins=(window.Capacitor&&window.Capacitor.Plugins)||{};
 const Preferences=plugins.Preferences;
 const App=plugins.App;
+const Haptics=plugins.Haptics;
 let expirations={};
 let saving=Promise.resolve();
 let ready=false;
@@ -124,6 +125,13 @@ const store={
     return saving;
   }
 };
+
+function haptic(style){
+  if(!Haptics)return;
+  try{
+    Promise.resolve(Haptics.impact({style})).catch(()=>{});
+  }catch(err){}
+}
 
 function setOn(s){
   s.toggle.classList.remove('off');
@@ -173,6 +181,7 @@ items.forEach(i=>{
       delete expirations[s.id];
       store.save();
       setOn(s);
+      haptic('LIGHT');
 
       if(noticeTitle.textContent===i.name){
         clearTimeout(noticeTimer);
@@ -185,6 +194,7 @@ items.forEach(i=>{
     expirations[s.id]=expiresAt;
     store.save();
     setOff(s,expiresAt);
+    haptic('MEDIUM');
     noticeIcon.textContent=i.icon;
     noticeTitle.textContent=i.name;
     noticeMessage.textContent=i.message;

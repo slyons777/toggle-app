@@ -38,7 +38,7 @@ class FakeElement {
 const tick = () => new Promise(r => setImmediate(r));
 
 // Launches a fresh copy of the app against a shared "device" (clock + storage).
-async function launch(device, { native = true, source = script } = {}) {
+async function launch(device, { native = true, source = script, haptics: hapticMode = 'ok' } = {}) {
   const timers = new Map();
   let nextId = 1;
   const listeners = {};
@@ -56,6 +56,15 @@ async function launch(device, { native = true, source = script } = {}) {
   const App = {
     addListener: (ev, cb) => { listeners[ev] = cb; return Promise.resolve({ remove() {} }); },
   };
+  const haptics = [];
+  const Haptics = {
+    impact: ({ style }) => {
+      haptics.push(style);
+      if (hapticMode === 'reject') return Promise.reject(new Error('haptics unavailable'));
+      if (hapticMode === 'throw') throw new Error('haptics bridge error');
+      return Promise.resolve();
+    },
+  };
   const localStorage = {
     getItem: k => (device.storage.has(k) ? device.storage.get(k) : null),
     setItem: (k, v) => device.storage.set(k, String(v)),
@@ -63,7 +72,7 @@ async function launch(device, { native = true, source = script } = {}) {
 
   const context = {
     Date: FakeDate,
-    window: native ? { Capacitor: { Plugins: { Preferences, App } } } : {},
+    window: native ? { Capacitor: { Plugins: { Preferences, App, Haptics } } } : {},
     localStorage,
     document: {
       documentElement,
@@ -89,6 +98,7 @@ async function launch(device, { native = true, source = script } = {}) {
 
   const app = {
     items: vm.runInContext('items', context),
+    haptics,
     els,
     rows,
     documentElement,
@@ -306,4 +316,72 @@ test('changing a display label does not change persistent identity', async () =>
   await app.tap('Overthinking Again');
   assert.deepEqual(stored(device), { overthinking: T0 + 2 * MIN });
   assert.equal(app.els.noticeTitle.textContent, 'Overthinking Again');
+});
+
+test('haptics A: manually turning ON -> OFF requests one medium impact', async () => {
+  const app = await launch(newDevice());
+  await app.tap('Spiraling');
+  assert.deepEqual(app.haptics, ['MEDIUM']);
+});
+
+test('haptics B: manually turning OFF -> ON requests one light impact', async () => {
+  const app = await launch(newDevice());
+  await app.tap('Spiraling');
+  app.haptics.length = 0;
+  await app.tap('Spiraling');
+  assert.equal(app.isOff('Spiraling'), false);
+  assert.deepEqual(app.haptics, ['LIGHT']);
+});
+
+test('haptics C: automatic timer expiry and resume reconciliation request no haptic', async () => {
+  const app = await launch(newDevice());
+  await app.tap('Assuming');
+  await app.tap('Access');
+  app.haptics.length = 0;
+
+  await app.runFor(2 * MIN);
+  assert.equal(app.isOff('Assuming'), false);
+  assert.equal(app.isOff('Access'), false);
+  assert.deepEqual(app.haptics, []);
+
+  await app.tap('Rabbit Hole');
+  app.haptics.length = 0;
+  await app.suspendFor(10 * MIN);
+  await app.resume();
+  assert.equal(app.isOff('Rabbit Hole'), false);
+  assert.deepEqual(app.haptics, []);
+});
+
+test('haptics D: launch/restore reconciliation requests no haptic', async () => {
+  const saved = { overthinking: T0 + MIN, access: T0 - 1, 'savior-mode': T0 + 2 * MIN };
+  const device = newDevice(new Map([[KEY, JSON.stringify(saved)]]));
+  const app = await launch(device);
+  assert.deepEqual(app.offNames(), ['Overthinking', 'Savior Mode']);
+  assert.deepEqual(stored(device), { overthinking: T0 + MIN, 'savior-mode': T0 + 2 * MIN });
+  await app.runFor(40);
+  assert.deepEqual(app.haptics, []);
+});
+
+test('haptics E: a rejected or throwing haptic call does not prevent the switch state change', async () => {
+  for (const mode of ['reject', 'throw']) {
+    const device = newDevice();
+    const app = await launch(device, { haptics: mode });
+
+    await app.tap('Need to Know');
+    assert.equal(app.isOff('Need to Know'), true, mode);
+    assert.deepEqual(stored(device), { 'need-to-know': T0 + 2 * MIN }, mode);
+    assert.equal(app.els.noticeTitle.textContent, 'Need to Know', mode);
+
+    await app.tap('Need to Know');
+    assert.equal(app.isOff('Need to Know'), false, mode);
+    assert.deepEqual(stored(device), {}, mode);
+    assert.deepEqual(app.haptics, ['MEDIUM', 'LIGHT'], mode);
+  }
+});
+
+test('haptics are skipped entirely when the plugin is unavailable (browser)', async () => {
+  const app = await launch(newDevice(), { native: false });
+  await app.tap('Mental Noise');
+  assert.equal(app.isOff('Mental Noise'), true);
+  assert.deepEqual(app.haptics, []);
 });
