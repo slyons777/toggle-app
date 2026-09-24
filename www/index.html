@@ -1,6 +1,7 @@
 <!doctype html>
 <html><head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f2f7">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
@@ -58,7 +59,7 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
   }
   .phone{box-shadow:0 0 40px rgba(0,0,0,.18)}
 }
-@media(max-width:520px){body{background:var(--phone-bg);padding:0}.phone{width:100%;min-height:100vh;border-radius:0;padding:20px;box-shadow:none}.notice{top:10px}}
+@media(max-width:520px){body{background:var(--phone-bg);padding:0}.phone{width:100%;min-height:100vh;border-radius:0;padding:calc(20px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));box-shadow:none}.notice{top:calc(10px + env(safe-area-inset-top))}}
 </style></head>
 <body><div class="phone">
 <h1>Mel's Mind</h1><div class="sub">Your brain. Your settings.</div>
