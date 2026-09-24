@@ -77,18 +77,18 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 </div>
 <script>
 const items=[
-['🧠','Overthinking','You don\'t need to solve this right now.','mind'],
-['🌀','Spiraling','Pause. Take one deep breath.','mind'],
-['💭','Assuming','You don\'t have all the pieces yet.','mind'],
-['🔁','Replaying It','Let it rest.','mind'],
-['🪞','Self-Criticism','Talk to yourself like someone you love.','mind'],
-['🌧️','Thinking Worst Case','You don\'t know the future yet.','mind'],
-['🐇','Rabbit Hole','Come back to where you are.','mind'],
-['🔍','Need to Know','Not everything needs to be solved in this moment.','mind'],
-['🔕','Mental Noise','Where could you find some quiet right now?','mind'],
-['🔐','Access','Access to you is not unlimited.','bounds'],
-['🛟','Savior Mode','You can care without carrying it.','bounds'],
-['⚖️','Feeling Obligated','A request is not a requirement.','bounds']
+{id:'overthinking',icon:'🧠',name:'Overthinking',message:'You don\'t need to solve this right now.',section:'mind'},
+{id:'spiraling',icon:'🌀',name:'Spiraling',message:'Pause. Take one deep breath.',section:'mind'},
+{id:'assuming',icon:'💭',name:'Assuming',message:'You don\'t have all the pieces yet.',section:'mind'},
+{id:'replaying-it',icon:'🔁',name:'Replaying It',message:'Let it rest.',section:'mind'},
+{id:'self-criticism',icon:'🪞',name:'Self-Criticism',message:'Talk to yourself like someone you love.',section:'mind'},
+{id:'thinking-worst-case',icon:'🌧️',name:'Thinking Worst Case',message:'You don\'t know the future yet.',section:'mind'},
+{id:'rabbit-hole',icon:'🐇',name:'Rabbit Hole',message:'Come back to where you are.',section:'mind'},
+{id:'need-to-know',icon:'🔍',name:'Need to Know',message:'Not everything needs to be solved in this moment.',section:'mind'},
+{id:'mental-noise',icon:'🔕',name:'Mental Noise',message:'Where could you find some quiet right now?',section:'mind'},
+{id:'access',icon:'🔐',name:'Access',message:'Access to you is not unlimited.',section:'bounds'},
+{id:'savior-mode',icon:'🛟',name:'Savior Mode',message:'You can care without carrying it.',section:'bounds'},
+{id:'feeling-obligated',icon:'⚖️',name:'Feeling Obligated',message:'A request is not a requirement.',section:'bounds'}
 ];
 const notice=document.getElementById('notice');
 const noticeIcon=document.getElementById('noticeIcon');
@@ -127,14 +127,14 @@ const store={
 
 function setOn(s){
   s.toggle.classList.remove('off');
-  s.toggle.setAttribute('aria-label',`Turn off ${s.item[1]}`);
+  s.toggle.setAttribute('aria-label',`Turn off ${s.item.name}`);
   clearTimeout(s.resetTimer);
   s.resetTimer=null;
 }
 
 function setOff(s,expiresAt){
   s.toggle.classList.add('off');
-  s.toggle.setAttribute('aria-label',`Turn on ${s.item[1]}`);
+  s.toggle.setAttribute('aria-label',`Turn on ${s.item.name}`);
   clearTimeout(s.resetTimer);
   s.resetTimer=setTimeout(reconcile,Math.max(0,expiresAt-Date.now()));
 }
@@ -162,8 +162,8 @@ document.documentElement.classList.add('restoring');
 items.forEach(i=>{
   let r=document.createElement('div');
   r.className='row';
-  r.innerHTML=`<div class=name><span class=icon>${i[0]}</span>${i[1]}</div><button class=toggle aria-label="Turn off ${i[1]}"><span class=knob></span></button>`;
-  const s={id:i[1].toLowerCase().replace(/[^a-z0-9]+/g,'-'),item:i,toggle:r.querySelector('button'),resetTimer:null};
+  r.innerHTML=`<div class=name><span class=icon>${i.icon}</span>${i.name}</div><button class=toggle aria-label="Turn off ${i.name}"><span class=knob></span></button>`;
+  const s={id:i.id,item:i,toggle:r.querySelector('button'),resetTimer:null};
   switches.push(s);
   s.toggle.onclick=e=>{
     if(!ready)return;
@@ -174,7 +174,7 @@ items.forEach(i=>{
       store.save();
       setOn(s);
 
-      if(noticeTitle.textContent===i[1]){
+      if(noticeTitle.textContent===i.name){
         clearTimeout(noticeTimer);
         notice.classList.remove('show');
       }
@@ -185,15 +185,15 @@ items.forEach(i=>{
     expirations[s.id]=expiresAt;
     store.save();
     setOff(s,expiresAt);
-    noticeIcon.textContent=i[0];
-    noticeTitle.textContent=i[1];
-    noticeMessage.textContent=i[2];
+    noticeIcon.textContent=i.icon;
+    noticeTitle.textContent=i.name;
+    noticeMessage.textContent=i.message;
     clearTimeout(noticeTimer);
     notice.classList.remove('show');
     requestAnimationFrame(()=>requestAnimationFrame(()=>notice.classList.add('show')));
     noticeTimer=setTimeout(()=>notice.classList.remove('show'),4500);
   };
-  document.getElementById(i[3]).appendChild(r);
+  document.getElementById(i.section).appendChild(r);
 });
 
 store.load().then(saved=>{

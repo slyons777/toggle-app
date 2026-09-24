@@ -38,7 +38,7 @@ class FakeElement {
 const tick = () => new Promise(r => setImmediate(r));
 
 // Launches a fresh copy of the app against a shared "device" (clock + storage).
-async function launch(device, { native = true } = {}) {
+async function launch(device, { native = true, source = script } = {}) {
   const timers = new Map();
   let nextId = 1;
   const listeners = {};
@@ -77,7 +77,7 @@ async function launch(device, { native = true } = {}) {
     requestAnimationFrame: fn => context.setTimeout(fn, 16),
   };
   vm.createContext(context);
-  vm.runInContext(script, context);
+  vm.runInContext(source, context);
   await tick();
 
   const rows = [...els.mind.children, ...els.bounds.children];
@@ -88,6 +88,7 @@ async function launch(device, { native = true } = {}) {
   };
 
   const app = {
+    items: vm.runInContext('items', context),
     els,
     rows,
     documentElement,
@@ -260,4 +261,49 @@ test('switch transitions are suppressed only while restoring saved state', async
   assert.equal(app.documentElement.classList.contains('restoring'), true);
   await app.runFor(40);
   assert.equal(app.documentElement.classList.contains('restoring'), false);
+});
+
+const STABLE_IDS = [
+  'overthinking', 'spiraling', 'assuming', 'replaying-it', 'self-criticism', 'thinking-worst-case',
+  'rabbit-hole', 'need-to-know', 'mental-noise', 'access', 'savior-mode', 'feeling-obligated',
+];
+// ID scheme used before explicit IDs existed; data saved by that build is keyed this way.
+const legacySlug = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+test('built-in switches declare the permanent explicit IDs', async () => {
+  const app = await launch(newDevice());
+  assert.deepEqual(Array.from(app.items, i => i.id), STABLE_IDS);
+  assert.equal(new Set(STABLE_IDS).size, STABLE_IDS.length);
+});
+
+test('explicit IDs match the legacy name-derived IDs, so saved data needs no migration', async () => {
+  const app = await launch(newDevice());
+  for (const item of app.items) assert.equal(item.id, legacySlug(item.name), item.name);
+});
+
+test('saved data keyed by the existing IDs restores every switch', async () => {
+  const saved = Object.fromEntries(STABLE_IDS.map((id, n) => [id, T0 + MIN + n * 1000]));
+  const device = newDevice(new Map([[KEY, JSON.stringify(saved)]]));
+  const app = await launch(device);
+  assert.equal(app.offNames().length, 12);
+  assert.deepEqual(stored(device), saved);
+
+  await app.runFor(MIN + 7_500);
+  assert.deepEqual(app.offNames(), ['Mental Noise', 'Access', 'Savior Mode', 'Feeling Obligated']);
+  assert.deepEqual(Object.keys(stored(device)), ['mental-noise', 'access', 'savior-mode', 'feeling-obligated']);
+});
+
+test('changing a display label does not change persistent identity', async () => {
+  const renamed = script.replace("name:'Overthinking'", "name:'Overthinking Again'");
+  assert.notEqual(renamed, script, 'rename fixture must apply');
+
+  const device = newDevice(new Map([[KEY, JSON.stringify({ overthinking: T0 + MIN })]]));
+  const app = await launch(device, { source: renamed });
+  assert.deepEqual(app.offNames(), ['Overthinking Again']);
+
+  await app.tap('Overthinking Again');
+  assert.deepEqual(stored(device), {});
+  await app.tap('Overthinking Again');
+  assert.deepEqual(stored(device), { overthinking: T0 + 2 * MIN });
+  assert.equal(app.els.noticeTitle.textContent, 'Overthinking Again');
 });
