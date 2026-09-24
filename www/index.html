@@ -36,6 +36,7 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 .row{height:57px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--divider)}
 .row:last-child{border:0}.name{display:flex;align-items:center;gap:11px;font-size:16px}.icon{width:24px;text-align:center;font-size:20px;line-height:1}
 .toggle{width:49px;height:29px;border-radius:18px;background:#34c759;position:relative;border:0;padding:0;cursor:pointer;transition:background-color .18s ease}.toggle.off{background:var(--toggle-off)}.knob{width:25px;height:25px;background:#fff;border-radius:50%;position:absolute;top:2px;right:2px;box-shadow:0 1px 3px rgba(0,0,0,.42);transition:transform .18s ease}.toggle.off .knob{right:2px;transform:translateX(-20px)}
+.restoring .toggle,.restoring .knob{transition:none}
 .notice{position:fixed;z-index:20;top:18px;left:50%;width:min(340px,calc(100vw - 28px));box-sizing:border-box;display:grid;grid-template-columns:38px minmax(0,1fr);gap:11px;align-items:start;padding:13px 13px 14px;border:1px solid var(--banner-border);border-radius:19px;background:var(--banner-bg);box-shadow:inset 0 1px 0 var(--banner-highlight),0 12px 34px var(--banner-shadow);backdrop-filter:blur(26px) saturate(145%);-webkit-backdrop-filter:blur(26px) saturate(145%);opacity:0;pointer-events:none;transform:translate(-50%,-130%);transition:transform .36s cubic-bezier(.2,.9,.25,1.18),opacity .24s ease}
 .notice.show{opacity:1;transform:translate(-50%,0)}
 .notice-icon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:20px;line-height:1;background:#5856d6}
@@ -94,18 +95,84 @@ const noticeIcon=document.getElementById('noticeIcon');
 const noticeTitle=document.getElementById('noticeTitle');
 const noticeMessage=document.getElementById('noticeMessage');
 let noticeTimer;
+
+const RESET_MS=120000;
+const STORE_KEY='toggle.expirations.v1';
+const plugins=(window.Capacitor&&window.Capacitor.Plugins)||{};
+const Preferences=plugins.Preferences;
+const App=plugins.App;
+let expirations={};
+let saving=Promise.resolve();
+let ready=false;
+const switches=[];
+
+const store={
+  async load(){
+    try{
+      const raw=Preferences?(await Preferences.get({key:STORE_KEY})).value:localStorage.getItem(STORE_KEY);
+      const parsed=raw?JSON.parse(raw):{};
+      return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:{};
+    }catch(err){
+      return {};
+    }
+  },
+  save(){
+    const value=JSON.stringify(expirations);
+    saving=saving
+      .then(()=>Preferences?Preferences.set({key:STORE_KEY,value}):localStorage.setItem(STORE_KEY,value))
+      .catch(()=>{});
+    return saving;
+  }
+};
+
+function setOn(s){
+  s.toggle.classList.remove('off');
+  s.toggle.setAttribute('aria-label',`Turn off ${s.item[1]}`);
+  clearTimeout(s.resetTimer);
+  s.resetTimer=null;
+}
+
+function setOff(s,expiresAt){
+  s.toggle.classList.add('off');
+  s.toggle.setAttribute('aria-label',`Turn on ${s.item[1]}`);
+  clearTimeout(s.resetTimer);
+  s.resetTimer=setTimeout(reconcile,Math.max(0,expiresAt-Date.now()));
+}
+
+function reconcile(){
+  const now=Date.now();
+  let changed=false;
+  switches.forEach(s=>{
+    const expiresAt=expirations[s.id];
+    if(typeof expiresAt==='number'&&expiresAt>now){
+      setOff(s,expiresAt);
+      return;
+    }
+    if(s.id in expirations){
+      delete expirations[s.id];
+      changed=true;
+    }
+    setOn(s);
+  });
+  if(changed)store.save();
+}
+
+document.documentElement.classList.add('restoring');
+
 items.forEach(i=>{
   let r=document.createElement('div');
   r.className='row';
   r.innerHTML=`<div class=name><span class=icon>${i[0]}</span>${i[1]}</div><button class=toggle aria-label="Turn off ${i[1]}"><span class=knob></span></button>`;
-  r.querySelector('button').onclick=e=>{
+  const s={id:i[1].toLowerCase().replace(/[^a-z0-9]+/g,'-'),item:i,toggle:r.querySelector('button'),resetTimer:null};
+  switches.push(s);
+  s.toggle.onclick=e=>{
+    if(!ready)return;
     const toggle=e.currentTarget;
 
     if(toggle.classList.contains('off')){
-      toggle.classList.remove('off');
-      toggle.setAttribute('aria-label',`Turn off ${i[1]}`);
-      clearTimeout(toggle.resetTimer);
-      toggle.resetTimer=null;
+      delete expirations[s.id];
+      store.save();
+      setOn(s);
 
       if(noticeTitle.textContent===i[1]){
         clearTimeout(noticeTimer);
@@ -114,8 +181,10 @@ items.forEach(i=>{
       return;
     }
 
-    toggle.classList.add('off');
-    toggle.setAttribute('aria-label',`Turn on ${i[1]}`);
+    const expiresAt=Date.now()+RESET_MS;
+    expirations[s.id]=expiresAt;
+    store.save();
+    setOff(s,expiresAt);
     noticeIcon.textContent=i[0];
     noticeTitle.textContent=i[1];
     noticeMessage.textContent=i[2];
@@ -123,14 +192,17 @@ items.forEach(i=>{
     notice.classList.remove('show');
     requestAnimationFrame(()=>requestAnimationFrame(()=>notice.classList.add('show')));
     noticeTimer=setTimeout(()=>notice.classList.remove('show'),4500);
-
-    clearTimeout(toggle.resetTimer);
-    toggle.resetTimer=setTimeout(()=>{
-      toggle.classList.remove('off');
-      toggle.setAttribute('aria-label',`Turn off ${i[1]}`);
-      toggle.resetTimer=null;
-    },120000);
   };
   document.getElementById(i[3]).appendChild(r);
 });
+
+store.load().then(saved=>{
+  expirations=saved;
+  reconcile();
+  ready=true;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>document.documentElement.classList.remove('restoring')));
+});
+
+if(App)App.addListener('appStateChange',state=>{if(state.isActive&&ready)reconcile();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&ready)reconcile();});
 </script></body></html>
