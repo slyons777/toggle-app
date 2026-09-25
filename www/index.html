@@ -50,7 +50,7 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 .shutdown-entry{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:calc(100% - 16px);margin:0 8px 8px;padding:16px;border:0;border-radius:15px;background:var(--card);color:inherit;font:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .shutdown-entry-title{font-size:20px;font-weight:650}
 .shutdown-entry-sub{font-size:15px;color:var(--secondary)}
-.shutdown-view{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;padding:calc(36px + env(safe-area-inset-top)) 28px calc(28px + env(safe-area-inset-bottom));background:#0b0c10;color:#e5e5ea}
+.shutdown-view{position:fixed;inset:0;z-index:40;box-sizing:border-box;padding:calc(36px + env(safe-area-inset-top)) 28px calc(28px + env(safe-area-inset-bottom));background:#0b0c10;color:#e5e5ea}
 .shutdown-view[hidden]{display:none}
 .shutdown-kicker{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#8e8e93}
 .shutdown-remaining{margin-top:10px;font-size:64px;font-weight:600;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
@@ -58,6 +58,22 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 .shutdown-actions{display:flex;flex-direction:column;gap:10px}
 .shutdown-action,.shutdown-end{height:52px;border:0;border-radius:14px;background:#1c1c1e;color:#f2f2f7;font:inherit;font-size:17px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .shutdown-end{background:transparent;color:#aeaeb2}
+.shutdown-atmosphere{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.shutdown-atmosphere i{position:absolute;inset:-16%;background:radial-gradient(ellipse at 42% 36%,rgba(58,74,92,.22),transparent 62%);opacity:.16}
+.shutdown-stage{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:space-between;min-height:100%}
+.shutdown-ephemeral{margin:0 0 12px;font-size:15px;line-height:1.35;color:#8e8e93;opacity:0;transition:opacity 1.2s ease}
+.shutdown-ephemeral.show{opacity:.7}
+.shutdown-view[data-motion="immersive"] .shutdown-atmosphere i{animation:shutdownDrift 16s ease-in-out infinite}
+.shutdown-view[data-motion="gentle"] .shutdown-atmosphere i{opacity:.1;animation:shutdownDrift 28s ease-in-out infinite}
+.shutdown-view[data-motion="minimal"] .shutdown-atmosphere i,.shutdown-view[data-motion="reduced"] .shutdown-atmosphere i{opacity:.05;animation:none}
+.shutdown-view[data-phase="still"][data-motion="immersive"] .shutdown-atmosphere i,.shutdown-view[data-phase="still"][data-motion="gentle"] .shutdown-atmosphere i{opacity:.08;animation-duration:36s}
+.phone.is-receding{filter:brightness(.55);opacity:.42;transform:scale(.985)}
+.phone.is-receding-soft{filter:brightness(.78);opacity:.72;transform:scale(.995)}
+@keyframes shutdownDrift{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(1.2%,-1%,0)}}
+@media(prefers-reduced-motion:reduce){
+  .shutdown-atmosphere i{animation:none!important;opacity:.05!important}
+  .phone.is-receding,.phone.is-receding-soft{transform:none;filter:brightness(.85);opacity:.8}
+}
 .creator-form{max-height:min(640px,calc(100vh - 24px - env(safe-area-inset-top)));overflow:auto}
 .field{display:block;padding:8px 16px 10px;border-bottom:1px solid var(--divider)}
 .field-label{display:block;font-size:12px;font-weight:600;color:var(--secondary);margin-bottom:4px}
@@ -162,16 +178,21 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
   </div>
 </div>
 <div id="shutdownView" class="shutdown-view" hidden>
-  <div>
-    <div class="shutdown-kicker">Shutdown</div>
-    <div id="shutdownRemaining" class="shutdown-remaining" role="timer" aria-live="off" aria-atomic="true">20:00</div>
-    <div id="shutdownSoundName" class="shutdown-meta">Brown Noise</div>
-  </div>
-  <div class="shutdown-actions">
-    <button id="shutdownSoundButton" class="shutdown-action" type="button">Sound</button>
-    <button id="shutdownTimeButton" class="shutdown-action" type="button">Time</button>
-    <button id="shutdownTransitionButton" class="shutdown-action" type="button">Transition</button>
-    <button id="shutdownEnd" class="shutdown-end" type="button">End Shutdown</button>
+  <div class="shutdown-atmosphere" aria-hidden="true"><i></i></div>
+  <div class="shutdown-stage">
+    <div>
+      <div class="shutdown-kicker">Shutdown</div>
+      <div id="shutdownRemaining" class="shutdown-remaining" role="timer" aria-live="off" aria-atomic="true">20:00</div>
+      <div id="shutdownSoundName" class="shutdown-meta">Brown Noise</div>
+    </div>
+    <p id="shutdownEphemeral" class="shutdown-ephemeral" hidden>Everything can be quiet now.</p>
+    <div class="shutdown-actions">
+      <button id="shutdownSoundButton" class="shutdown-action" type="button">Sound</button>
+      <button id="shutdownTimeButton" class="shutdown-action" type="button">Time</button>
+      <button id="shutdownTransitionButton" class="shutdown-action" type="button">Transition</button>
+      <button id="shutdownHapticsButton" class="shutdown-action" type="button">Haptics · On</button>
+      <button id="shutdownEnd" class="shutdown-end" type="button">End Shutdown</button>
+    </div>
   </div>
 </div>
 <div id="shutdownTimeSheet" class="chooser" aria-hidden="true">
@@ -746,6 +767,7 @@ deleterCancel.onclick=closeDeleter;
 deleterBackdrop.onclick=closeDeleter;
 
 const SHUTDOWN_KEY='toggle.shutdown.v1';
+const SHUTDOWN_HAPTICS_KEY='toggle.shutdown-haptics.v1';
 const SHUTDOWN_MINUTES=[10,20,30,60];
 const SHUTDOWN_SOUNDS=[
   {id:'brown-noise',name:'Brown Noise'},
@@ -764,8 +786,13 @@ const shutdownRemaining=document.getElementById('shutdownRemaining');
 const shutdownSoundName=document.getElementById('shutdownSoundName');
 const shutdownEntry=document.getElementById('shutdownEntry');
 let shutdownState={defaults:{...SHUTDOWN_FACTORY},session:null};
+let shutdownHapticsOn=true;
 let shutdownTimer=null;
 let shutdownSheet=null;
+let transitionTimers=[];
+let transitionClips=new Set();
+let sweepCtx=null;
+let sweepStop=null;
 
 function shutdownName(list,id){
   const found=list.find(item=>item.id===id);
@@ -826,6 +853,7 @@ function renderShutdown(){
   document.getElementById('shutdownSoundButton').textContent=`Sound · ${sound}`;
   document.getElementById('shutdownTimeButton').textContent=`Time · ${session.durationMinutes} minutes`;
   document.getElementById('shutdownTransitionButton').textContent=`Transition · ${transition}`;
+  document.getElementById('shutdownHapticsButton').textContent=`Haptics · ${shutdownHapticsOn?'On':'Off'}`;
 }
 
 function showShutdown(){
@@ -879,6 +907,193 @@ function openShutdownSheet(sheet){
   if(first)first.focus({preventScroll:true});
 }
 
+function prefersReducedMotion(){
+  try{
+    return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }catch(err){
+    return false;
+  }
+}
+
+function visualMotion(transition){
+  if(prefersReducedMotion())return 'reduced';
+  if(transition==='gentle'||transition==='minimal')return transition;
+  return 'immersive';
+}
+
+function clearTransitionTimers(){
+  transitionTimers.forEach(id=>clearTimeout(id));
+  transitionTimers=[];
+}
+
+function hideEphemeral(){
+  const line=document.getElementById('shutdownEphemeral');
+  line.hidden=true;
+  line.classList.remove('show');
+}
+
+function setShutdownPhase(phase){
+  shutdownView.setAttribute('data-phase',phase);
+}
+
+function applyEnterVisual(transition){
+  const motion=visualMotion(transition);
+  shutdownView.setAttribute('data-motion',motion);
+  phone.classList.remove('is-receding','is-receding-soft');
+  if(motion==='immersive')phone.classList.add('is-receding');
+  else if(motion==='gentle')phone.classList.add('is-receding-soft');
+}
+
+function applyRestoredVisual(transition){
+  clearTransitionTimers();
+  hideEphemeral();
+  if(sweepStop){try{sweepStop();}catch(err){}sweepStop=null;}
+  shutdownView.setAttribute('data-motion',visualMotion(transition));
+  setShutdownPhase('still');
+  phone.classList.remove('is-receding','is-receding-soft');
+}
+
+function armShutdownHaptics(steps){
+  if(!shutdownHapticsOn)return;
+  steps.forEach(([delay,style])=>{
+    const fire=()=>{if(shutdownState.session)haptic(style);};
+    if(delay<=0)fire();
+    else transitionTimers.push(setTimeout(fire,delay));
+  });
+}
+
+function scheduleEphemeral(){
+  const line=document.getElementById('shutdownEphemeral');
+  transitionTimers.push(setTimeout(()=>{
+    if(!shutdownState.session)return;
+    line.hidden=false;
+    line.classList.add('show');
+    transitionTimers.push(setTimeout(()=>{
+      line.classList.remove('show');
+      transitionTimers.push(setTimeout(()=>{line.hidden=true;},1400));
+    },3200));
+  },400));
+}
+
+function scheduleStill(ms){
+  transitionTimers.push(setTimeout(()=>{
+    if(!shutdownState.session)return;
+    setShutdownPhase('still');
+    stopNativeClips();
+    scheduleEphemeral();
+  },ms));
+}
+
+function startWebSweep(style){
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC||style==='minimal')return false;
+  try{
+    if(!sweepCtx)sweepCtx=new AC();
+    const ctx=sweepCtx;
+    const gentle=style==='gentle';
+    const seconds=gentle?8:12;
+    const width=gentle?0.42:1;
+    const frames=ctx.sampleRate;
+    const buffer=ctx.createBuffer(2,frames,ctx.sampleRate);
+    const left=buffer.getChannelData(0);
+    const right=buffer.getChannelData(1);
+    let seed=0.2;
+    for(let i=0;i<frames;i++){
+      seed=(seed*16807)%2147483647;
+      const n=(seed/2147483647)*2-1;
+      left[i]=n*0.35;
+      right[i]=left[Math.max(0,i-180)]*0.65+n*0.2;
+    }
+    const source=ctx.createBufferSource();
+    source.buffer=buffer;
+    source.loop=true;
+    const filter=ctx.createBiquadFilter();
+    filter.type='lowpass';
+    const delay=ctx.createDelay(0.05);
+    const panner=ctx.createStereoPanner();
+    const gain=ctx.createGain();
+    const t=ctx.currentTime;
+    filter.frequency.setValueAtTime(gentle?1200:2200,t);
+    filter.frequency.linearRampToValueAtTime(gentle?480:360,t+seconds);
+    delay.delayTime.setValueAtTime(0.004,t);
+    delay.delayTime.linearRampToValueAtTime(gentle?0.012:0.028,t+seconds*0.72);
+    delay.delayTime.linearRampToValueAtTime(0.006,t+seconds);
+    panner.pan.setValueAtTime(-width,t);
+    panner.pan.linearRampToValueAtTime(0,t+seconds*0.3);
+    panner.pan.linearRampToValueAtTime(width*0.8,t+seconds*0.55);
+    panner.pan.linearRampToValueAtTime(0.05,t+seconds*0.8);
+    panner.pan.linearRampToValueAtTime(0,t+seconds);
+    const peak=gentle?0.05:0.11;
+    gain.gain.setValueAtTime(0.0001,t);
+    gain.gain.linearRampToValueAtTime(peak,t+0.8);
+    gain.gain.linearRampToValueAtTime(peak*0.7,t+seconds*0.55);
+    gain.gain.linearRampToValueAtTime(0.0001,t+seconds);
+    source.connect(filter);
+    filter.connect(delay);
+    delay.connect(panner);
+    panner.connect(gain);
+    gain.connect(ctx.destination);
+    const go=()=>{source.start(t);source.stop(t+seconds);};
+    if(ctx.state==='suspended')ctx.resume().then(go).catch(()=>{});
+    else go();
+    sweepStop=()=>{try{source.stop();}catch(err){}};
+    return true;
+  }catch(err){
+    return false;
+  }
+}
+
+async function playNativeClip(id,volume){
+  if(!NativeAudio)return;
+  try{
+    await configureAmbient();
+    await NativeAudio.preload({assetId:id,assetPath:`audio/${id}.wav`,audioChannelNum:1,isUrl:false,volume});
+    await NativeAudio.play({assetId:id,volume});
+    transitionClips.add(id);
+  }catch(err){}
+}
+
+async function stopNativeClips(){
+  if(sweepStop){try{sweepStop();}catch(err){}sweepStop=null;}
+  const ids=[...transitionClips];
+  transitionClips.clear();
+  if(!NativeAudio)return;
+  for(const id of ids){
+    try{await NativeAudio.stop({assetId:id});}catch(err){}
+    try{await NativeAudio.unload({assetId:id});}catch(err){}
+  }
+}
+
+async function beginTransition(style){
+  clearTransitionTimers();
+  hideEphemeral();
+  if(style==='minimal'){
+    setShutdownPhase('fade');
+    armShutdownHaptics([[0,'LIGHT']]);
+    scheduleStill(1800);
+    return;
+  }
+  const gentle=style==='gentle';
+  setShutdownPhase('threshold');
+  armShutdownHaptics(gentle?[[0,'MEDIUM'],[700,'LIGHT']]:[[0,'MEDIUM'],[480,'HEAVY'],[1100,'LIGHT']]);
+  const web=startWebSweep(style);
+  try{
+    await playNativeClip('threshold-enter',gentle?0.1:0.22);
+    if(!web)await playNativeClip('sweep-texture',gentle?0.1:0.2);
+  }catch(err){}
+  transitionTimers.push(setTimeout(()=>{if(shutdownState.session)setShutdownPhase('sweep');},gentle?2000:2500));
+  scheduleStill(gentle?7000:11000);
+}
+
+async function loadShutdownHaptics(){
+  try{
+    const parsed=await storage.read(SHUTDOWN_HAPTICS_KEY);
+    shutdownHapticsOn=parsed!==false;
+  }catch(err){
+    shutdownHapticsOn=true;
+  }
+}
+
 function beginShutdown(){
   if(!ready||shutdownState.session)return;
   const defaults=shutdownState.defaults;
@@ -890,8 +1105,9 @@ function beginShutdown(){
   };
   shutdownStore.save();
   showShutdown();
+  applyEnterVisual(defaults.transition);
   scheduleShutdownTick();
-  syncAmbient();
+  syncAmbient({fadeIn:defaults.transition!=='minimal'}).then(()=>beginTransition(defaults.transition)).catch(()=>{});
 }
 
 // Changing the duration restarts from now. The session ends at the moment of the change plus the newly chosen length.
@@ -926,14 +1142,20 @@ function setShutdownTransition(id){
 }
 
 function endShutdown(manual){
+  const style=shutdownState.session&&shutdownState.session.transition;
   closeShutdownSheet();
   clearTimeout(shutdownTimer);
   shutdownTimer=null;
+  clearTransitionTimers();
+  hideEphemeral();
+  phone.classList.remove('is-receding','is-receding-soft');
   shutdownState.session=null;
   shutdownStore.save();
   showMain();
-  syncAmbient();
-  if(manual)haptic('LIGHT');
+  stopNativeClips().then(()=>{
+    if(manual&&style&&style!=='minimal')return playNativeClip('threshold-exit',style==='gentle'?0.08:0.14);
+  }).then(()=>stopAmbient(manual)).catch(()=>{});
+  if(manual&&shutdownHapticsOn)haptic('LIGHT');
 }
 
 function reconcileShutdown(){
@@ -947,6 +1169,7 @@ function reconcileShutdown(){
     return;
   }
   showShutdown();
+  applyRestoredVisual(session.transition);
   scheduleShutdownTick();
   syncAmbient();
 }
@@ -963,7 +1186,10 @@ let ambientQueue=Promise.resolve();
 let ambientConfigured=false;
 let browserAudio=null;
 
-function syncAmbient(){
+let ambientFadeIn=false;
+
+function syncAmbient(opts){
+  ambientFadeIn=!!(opts&&opts.fadeIn);
   const sound=shutdownState.session&&shutdownState.session.sound;
   const wanted=sound&&AMBIENT_FILES[sound]?sound:null;
   ambientQueue=ambientQueue.then(()=>applyAmbient(wanted)).catch(()=>{});
@@ -977,8 +1203,10 @@ async function configureAmbient(){
 }
 
 async function applyAmbient(wanted){
+  const fade=ambientFadeIn;
+  ambientFadeIn=false;
   if(ambientId===wanted)return;
-  await stopAmbient();
+  await stopAmbient(false);
   if(!wanted)return;
   try{
     if(NativeAudio){
@@ -986,6 +1214,10 @@ async function applyAmbient(wanted){
       await NativeAudio.preload({assetId:wanted,assetPath:AMBIENT_FILES[wanted],audioChannelNum:1,isUrl:false,volume:AMBIENT_VOLUME});
       await NativeAudio.loop({assetId:wanted});
       ambientId=wanted;
+      if(fade){
+        try{await NativeAudio.setVolume({assetId:wanted,volume:0.12,duration:0});}catch(err){}
+        try{await NativeAudio.setVolume({assetId:wanted,volume:AMBIENT_VOLUME,duration:8});}catch(err){}
+      }
       return;
     }
     if(typeof Audio==='undefined')return;
@@ -993,6 +1225,7 @@ async function applyAmbient(wanted){
     audio.loop=true;
     audio.volume=AMBIENT_VOLUME;
     await audio.play();
+    if(fade)audio.volume=0.12;
     browserAudio=audio;
     ambientId=wanted;
   }catch(err){
@@ -1000,11 +1233,11 @@ async function applyAmbient(wanted){
   }
 }
 
-async function stopAmbient(){
+async function stopAmbient(soft){
   const current=ambientId;
   ambientId=null;
   if(NativeAudio&&current){
-    try{await NativeAudio.stop({assetId:current});}catch(err){}
+    try{await NativeAudio.stop({assetId:current,fadeOut:!!soft,fadeOutDuration:0.8});}catch(err){}
     try{await NativeAudio.unload({assetId:current});}catch(err){}
   }
   if(browserAudio){
@@ -1029,6 +1262,11 @@ function refillShutdownSheet(container,items,current,onPick){
 }
 
 shutdownEntry.onclick=beginShutdown;
+document.getElementById('shutdownHapticsButton').onclick=()=>{
+  shutdownHapticsOn=!shutdownHapticsOn;
+  storage.write(SHUTDOWN_HAPTICS_KEY,shutdownHapticsOn);
+  renderShutdown();
+};
 document.getElementById('shutdownEnd').onclick=()=>endShutdown(true);
 document.getElementById('shutdownTimeButton').onclick=()=>{
   refillShutdownSheet(
@@ -1063,7 +1301,7 @@ document.getElementById('shutdownTransitionButton').onclick=()=>{
 
 items.forEach(i=>makeSwitch(i,false));
 
-Promise.all([store.load(),customStore.load(),shutdownStore.load()]).then(([saved,savedCustoms,savedShutdown])=>{
+Promise.all([store.load(),customStore.load(),shutdownStore.load(),loadShutdownHaptics()]).then(([saved,savedCustoms,savedShutdown])=>{
   customs=savedCustoms;
   customs.forEach(rec=>makeSwitch({...rec,section:'mine'},true));
   renderMine();

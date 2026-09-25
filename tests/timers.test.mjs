@@ -64,7 +64,7 @@ const rowParts = row => ({
 const tick = () => new Promise(r => setImmediate(r));
 
 // Launches a fresh copy of the app against a shared "device" (clock + storage).
-async function launch(device, { native = true, source = script, haptics: hapticMode = 'ok', audio: audioMode = 'ok' } = {}) {
+async function launch(device, { native = true, source = script, haptics: hapticMode = 'ok', audio: audioMode = 'ok', reducedMotion = false } = {}) {
   const timers = new Map();
   let nextId = 1;
   const listeners = {};
@@ -82,6 +82,7 @@ async function launch(device, { native = true, source = script, haptics: hapticM
       'shutdownTimeSheet', 'shutdownTimeTitle', 'shutdownTimeOptions', 'shutdownTimeCancel', 'shutdownTimeBackdrop',
       'shutdownSoundSheet', 'shutdownSoundTitle', 'shutdownSoundOptions', 'shutdownSoundCancel', 'shutdownSoundBackdrop',
       'shutdownTransitionSheet', 'shutdownTransitionTitle', 'shutdownTransitionOptions', 'shutdownTransitionCancel', 'shutdownTransitionBackdrop',
+      'shutdownEphemeral', 'shutdownHapticsButton',
     ].map(id => [id, new FakeElement()])
   );
   const documentElement = new FakeElement();
@@ -112,6 +113,8 @@ async function launch(device, { native = true, source = script, haptics: hapticM
     configure: async options => { audioLog.push(['configure', options]); if (audioMode === 'configure-fail') throw new Error('configure failed'); },
     preload: async options => { audioLog.push(['preload', options.assetId, options.volume]); if (audioMode === 'fail') throw new Error('preload failed'); loaded.add(options.assetId); },
     loop: async ({ assetId }) => { audioLog.push(['loop', assetId]); if (audioMode === 'fail') throw new Error('loop failed'); looping.add(assetId); },
+    play: async ({ assetId, volume }) => { audioLog.push(['play', assetId, volume]); if (audioMode === 'fail') throw new Error('play failed'); },
+    setVolume: async ({ assetId, volume, duration }) => { audioLog.push(['setVolume', assetId, volume, duration || 0]); },
     stop: async ({ assetId }) => { audioLog.push(['stop', assetId]); looping.delete(assetId); },
     unload: async ({ assetId }) => { audioLog.push(['unload', assetId]); loaded.delete(assetId); },
   };
@@ -122,7 +125,10 @@ async function launch(device, { native = true, source = script, haptics: hapticM
 
   const context = {
     Date: FakeDate,
-    window: native ? { Capacitor: { Plugins: { Preferences, App, Haptics, NativeAudio } } } : {},
+    window: {
+      ...(native ? { Capacitor: { Plugins: { Preferences, App, Haptics, NativeAudio } } } : {}),
+      matchMedia: query => ({ matches: reducedMotion && String(query).includes('prefers-reduced-motion') }),
+    },
     Audio: native ? undefined : function BrowserAudio(src) {
       this.src = src;
       this.loop = false;
@@ -1226,12 +1232,14 @@ test('shutdown F: resume reconciles the remaining time without a haptic', async 
   const device = newDevice();
   const app = await launch(device);
   await app.startShutdown();
+  const entry = [...app.haptics];
   await app.suspendFor(5 * MIN);
   await app.resume();
   assert.equal(app.shutdownActive(), true);
   assert.equal(app.els.shutdownRemaining.textContent, '15:00');
   assert.equal(storedShutdown(device).session.endsAt, T0 + 20 * MIN);
-  assert.deepEqual(app.haptics, []);
+  assert.deepEqual(app.haptics, entry);
+  assert.equal(app.els.shutdownView.getAttribute('data-phase'), 'still');
 });
 
 test('shutdown G and H: manual End Shutdown clears the session and returns to the main app', async () => {
@@ -1249,19 +1257,22 @@ test('shutdown I and J: automatic expiry returns to the main app with no haptic'
   const device = newDevice();
   const app = await launch(device);
   await app.startShutdown();
-  await app.runFor(20 * MIN - 1);
-  assert.equal(app.shutdownActive(), true);
-  await app.runFor(1);
+  await app.runFor(2000);
+  const afterEntry = [...app.haptics];
+  await app.runFor(20 * MIN);
   assert.equal(app.shutdownActive(), false);
   assert.equal(storedShutdown(device).session, null);
-  assert.deepEqual(app.haptics, []);
+  assert.deepEqual(app.haptics, afterEntry);
+  assert.equal(app.audioLog.some(entry => entry[1] === 'threshold-exit'), false);
 });
 
-test('shutdown K: manual End Shutdown triggers only the light haptic', async () => {
+test('shutdown K: manual End Shutdown adds the light haptic', async () => {
   const app = await launch(newDevice());
   await app.startShutdown();
+  const before = app.haptics.length;
   await app.endShutdown();
-  assert.deepEqual(app.haptics, ['LIGHT']);
+  assert.equal(app.haptics[before], 'LIGHT');
+  assert.equal(app.haptics.length, before + 1);
 });
 
 test('shutdown L: changing duration restarts the end time from now', async () => {
@@ -1438,4 +1449,123 @@ test('audio M: the browser fallback plays in the foreground and does not throw',
   assert.deepEqual(app.audioLog, [['browser-play', 'audio/brown-noise.wav', 0.35, true]]);
   await app.endShutdown();
   assert.equal(app.audioLog.at(-1)[0], 'browser-pause');
+});
+
+const HAPTICS_KEY = 'toggle.shutdown-haptics.v1';
+const plays = (app, id) => app.audioLog.filter(entry => entry[0] === 'play' && entry[1] === id);
+
+test('transition A and B: a new immersive entry starts the full path', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  assert.equal(app.els.shutdownView.getAttribute('data-phase'), 'threshold');
+  assert.equal(app.els.shutdownView.getAttribute('data-motion'), 'immersive');
+  assert.equal(app.phone.classList.contains('is-receding'), true);
+  assert.equal(plays(app, 'threshold-enter').length, 1);
+  assert.equal(plays(app, 'threshold-enter')[0][2], 0.22);
+  assert.equal(plays(app, 'sweep-texture')[0][2], 0.2);
+  assert.deepEqual(app.haptics, ['MEDIUM']);
+  await app.runFor(12000);
+  assert.equal(app.els.shutdownView.getAttribute('data-phase'), 'still');
+  assert.equal(app.els.shutdownEphemeral.classList.contains('show'), true);
+  assert.deepEqual(app.looping(), ['brown-noise']);
+  assert.deepEqual(app.haptics, ['MEDIUM', 'HEAVY', 'LIGHT']);
+});
+
+test('transition C: gentle uses the reduced path', async () => {
+  const device = newDevice(new Map([[SHUTDOWN_KEY, JSON.stringify({ defaults: { durationMinutes: 20, sound: 'brown-noise', transition: 'gentle' }, session: null })]]));
+  const app = await launch(device);
+  await app.startShutdown();
+  assert.equal(app.els.shutdownView.getAttribute('data-motion'), 'gentle');
+  assert.equal(app.phone.classList.contains('is-receding-soft'), true);
+  assert.equal(plays(app, 'threshold-enter')[0][2], 0.1);
+  assert.equal(plays(app, 'sweep-texture')[0][2], 0.1);
+  await app.runFor(1200);
+  assert.deepEqual(app.haptics, ['MEDIUM', 'LIGHT']);
+});
+
+test('transition D: minimal skips the Spatial Sweep', async () => {
+  const device = newDevice(new Map([[SHUTDOWN_KEY, JSON.stringify({ defaults: { durationMinutes: 20, sound: 'rain', transition: 'minimal' }, session: null })]]));
+  const app = await launch(device);
+  await app.startShutdown();
+  assert.equal(app.els.shutdownView.getAttribute('data-phase'), 'fade');
+  assert.equal(app.els.shutdownView.getAttribute('data-motion'), 'minimal');
+  assert.equal(plays(app, 'sweep-texture').length, 0);
+  assert.equal(plays(app, 'threshold-enter').length, 0);
+  assert.deepEqual(app.looping(), ['rain']);
+  assert.deepEqual(app.haptics, ['LIGHT']);
+});
+
+test('transition E and F: restoring an active Shutdown does not replay entry', async () => {
+  const device = newDevice();
+  await (await launch(device)).startShutdown();
+  const relaunched = await launch(device);
+  assert.equal(relaunched.shutdownActive(), true);
+  assert.equal(relaunched.els.shutdownView.getAttribute('data-phase'), 'still');
+  assert.equal(plays(relaunched, 'threshold-enter').length, 0);
+  assert.equal(plays(relaunched, 'sweep-texture').length, 0);
+  assert.deepEqual(relaunched.haptics, []);
+  assert.deepEqual(relaunched.looping(), ['brown-noise']);
+});
+
+test('transition G and H: Shutdown haptics Off suppresses entry and manual exit', async () => {
+  const device = newDevice(new Map([[HAPTICS_KEY, 'false']]));
+  const app = await launch(device);
+  await app.startShutdown();
+  await app.runFor(2000);
+  await app.endShutdown();
+  assert.deepEqual(app.haptics, []);
+  await app.toggle('Overthinking');
+  assert.deepEqual(app.haptics, ['MEDIUM']);
+});
+
+test('transition I: automatic expiry fires no Shutdown haptic and no exit wash', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.runFor(2000);
+  const afterEntry = [...app.haptics];
+  await app.runFor(20 * MIN);
+  assert.deepEqual(app.haptics, afterEntry);
+  assert.equal(app.audioLog.some(entry => entry[1] === 'threshold-exit'), false);
+  assert.deepEqual(app.looping(), []);
+});
+
+test('transition J: Reduce Motion lowers visual intensity without weakening audio', async () => {
+  const app = await launch(newDevice(), { reducedMotion: true });
+  await app.startShutdown();
+  assert.equal(app.els.shutdownView.getAttribute('data-motion'), 'reduced');
+  assert.equal(app.phone.classList.contains('is-receding'), false);
+  assert.equal(plays(app, 'sweep-texture').length, 1);
+  assert.equal(app.els.shutdownView.getAttribute('data-phase'), 'threshold');
+});
+
+test('transition K and L: handoff keeps the selected bed, including Quiet', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.runFor(12000);
+  assert.equal(app.els.shutdownView.getAttribute('data-phase'), 'still');
+  assert.deepEqual(app.looping(), ['brown-noise']);
+  await app.shutdownChoice('shutdownSound', 'shutdownSoundOptions', 'Quiet');
+  assert.deepEqual(app.looping(), []);
+  assert.equal(app.audioLog.some(entry => entry[0] === 'loop' && entry[1] === 'quiet'), false);
+});
+
+test('transition M: manual exit stops transition and ambient audio', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.endShutdown();
+  assert.deepEqual(app.looping(), []);
+  assert.ok(app.audioLog.some(entry => entry[0] === 'stop' && entry[1] === 'brown-noise'));
+  assert.ok(app.audioLog.some(entry => entry[0] === 'stop' && entry[1] === 'threshold-enter'));
+  assert.equal(plays(app, 'threshold-exit').length, 1);
+});
+
+test('transition N: a failed transition does not corrupt the Shutdown session', async () => {
+  const device = newDevice();
+  const app = await launch(device, { audio: 'fail' });
+  await app.startShutdown();
+  assert.equal(app.shutdownActive(), true);
+  assert.equal(app.els.shutdownView.getAttribute('data-phase'), 'threshold');
+  assert.equal(storedShutdown(device).session.sound, 'brown-noise');
+  assert.equal(storedShutdown(device).session.endsAt, T0 + 20 * MIN);
+  assert.equal(storedShutdown(device).session.transition, 'immersive');
 });
