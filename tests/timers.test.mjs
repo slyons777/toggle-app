@@ -38,6 +38,13 @@ class FakeElement {
     nodes.forEach(n => this.appendChild(n));
   }
   focus() { FakeElement.focused = this; }
+  querySelector(sel) {
+    const all = [this, ...this.children.flatMap(function walk(node) {
+      return [node, ...node.children.flatMap(walk)];
+    })];
+    if (sel === 'button') return all.find(node => node.tag === 'button' || (node.className || '').includes('chooser-option') || node.classList.contains('chooser-option')) || null;
+    return null;
+  }
   remove() {
     if (this.parent) this.parent.children = this.parent.children.filter(c => c !== this);
     this.parent = null;
@@ -70,6 +77,11 @@ async function launch(device, { native = true, source = script, haptics: hapticM
       'mineSection', 'mine', 'createSwitch',
       'creator', 'creatorBackdrop', 'creatorTitle', 'creatorError', 'creatorFields', 'creatorForm', 'creatorCancel', 'creatorSave',
       'deleter', 'deleterBackdrop', 'deleterSheet', 'deleterTitle', 'deleterConfirm', 'deleterCancel',
+      'shutdownEntry', 'shutdownView', 'shutdownRemaining', 'shutdownSoundName',
+      'shutdownSoundButton', 'shutdownTimeButton', 'shutdownTransitionButton', 'shutdownEnd',
+      'shutdownTimeSheet', 'shutdownTimeTitle', 'shutdownTimeOptions', 'shutdownTimeCancel', 'shutdownTimeBackdrop',
+      'shutdownSoundSheet', 'shutdownSoundTitle', 'shutdownSoundOptions', 'shutdownSoundCancel', 'shutdownSoundBackdrop',
+      'shutdownTransitionSheet', 'shutdownTransitionTitle', 'shutdownTransitionOptions', 'shutdownTransitionCancel', 'shutdownTransitionBackdrop',
     ].map(id => [id, new FakeElement()])
   );
   const documentElement = new FakeElement();
@@ -174,6 +186,17 @@ async function launch(device, { native = true, source = script, haptics: hapticM
     askDelete: async name => { app.mineRow(name).remove.onclick(); await tick(); },
     confirmDelete: async () => { els.deleterConfirm.onclick(); await tick(); },
     cancelDelete: async () => { els.deleterCancel.onclick(); await tick(); },
+    shutdownActive: () => els.shutdownView.hidden === false,
+    startShutdown: async () => { els.shutdownEntry.onclick(); await tick(); },
+    endShutdown: async () => { els.shutdownEnd.onclick(); await tick(); },
+    shutdownChoice: async (sheetId, optionsId, label) => {
+      els[`${sheetId}Button`].onclick();
+      await tick();
+      const option = els[optionsId].children.find(node => node.textContent === label);
+      assert.ok(option, `no Shutdown option ${label}`);
+      option.onclick();
+      await tick();
+    },
     isQuickOff: name => quickButton(name).classList.contains('off'),
     pressQuick: async name => { quickButton(name).onclick(); await tick(); },
     pendingTimers: () => timers.size,
@@ -1131,5 +1154,154 @@ test('custom T: corrupt custom-switch storage does not break launch', async () =
       assert.equal(app.chooserLabels()[0], '5 minutes · Default', raw);
       await app.cancel();
     }
+  }
+});
+
+const SHUTDOWN_KEY = 'toggle.shutdown.v1';
+const storedShutdown = device => JSON.parse(device.storage.get(SHUTDOWN_KEY) ?? 'null');
+
+test('shutdown A: first use starts at 20 minutes, Brown Noise, Immersive', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  assert.equal(app.shutdownActive(), false);
+  await app.startShutdown();
+  const saved = storedShutdown(device);
+  assert.equal(saved.session.durationMinutes, 20);
+  assert.equal(saved.session.sound, 'brown-noise');
+  assert.equal(saved.session.transition, 'immersive');
+  assert.equal(app.els.shutdownRemaining.textContent, '20:00');
+  assert.equal(app.els.shutdownSoundName.textContent, 'Brown Noise');
+});
+
+test('shutdown B and C: tapping Shutdown immediately saves now plus the selected duration', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.startShutdown();
+  assert.equal(app.shutdownActive(), true);
+  assert.equal(app.phone.hidden, true);
+  assert.equal(storedShutdown(device).session.endsAt, T0 + 20 * MIN);
+});
+
+test('shutdown D: an active session restores after relaunch', async () => {
+  const device = newDevice();
+  await (await launch(device)).startShutdown();
+  device.now = T0 + 5 * MIN;
+  const relaunched = await launch(device);
+  assert.equal(relaunched.shutdownActive(), true);
+  assert.equal(relaunched.els.shutdownRemaining.textContent, '15:00');
+  assert.equal(storedShutdown(device).session.endsAt, T0 + 20 * MIN);
+});
+
+test('shutdown E: an expired session clears on relaunch', async () => {
+  const device = newDevice();
+  await (await launch(device)).startShutdown();
+  device.now = T0 + 20 * MIN;
+  const relaunched = await launch(device);
+  assert.equal(relaunched.shutdownActive(), false);
+  assert.equal(relaunched.phone.hidden, false);
+  assert.equal(storedShutdown(device).session, null);
+  assert.deepEqual(relaunched.haptics, []);
+});
+
+test('shutdown F: resume reconciles the remaining time without a haptic', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.startShutdown();
+  await app.suspendFor(5 * MIN);
+  await app.resume();
+  assert.equal(app.shutdownActive(), true);
+  assert.equal(app.els.shutdownRemaining.textContent, '15:00');
+  assert.equal(storedShutdown(device).session.endsAt, T0 + 20 * MIN);
+  assert.deepEqual(app.haptics, []);
+});
+
+test('shutdown G and H: manual End Shutdown clears the session and returns to the main app', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.startShutdown();
+  await app.endShutdown();
+  assert.equal(app.shutdownActive(), false);
+  assert.equal(app.phone.hidden, false);
+  assert.equal(storedShutdown(device).session, null);
+  assert.equal(app.rows.length, 12);
+});
+
+test('shutdown I and J: automatic expiry returns to the main app with no haptic', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.startShutdown();
+  await app.runFor(20 * MIN - 1);
+  assert.equal(app.shutdownActive(), true);
+  await app.runFor(1);
+  assert.equal(app.shutdownActive(), false);
+  assert.equal(storedShutdown(device).session, null);
+  assert.deepEqual(app.haptics, []);
+});
+
+test('shutdown K: manual End Shutdown triggers only the light haptic', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.endShutdown();
+  assert.deepEqual(app.haptics, ['LIGHT']);
+});
+
+test('shutdown L: changing duration restarts the end time from now', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.startShutdown();
+  await app.runFor(MIN);
+  await app.shutdownChoice('shutdownTime', 'shutdownTimeOptions', '10 minutes');
+  assert.equal(storedShutdown(device).session.endsAt, T0 + MIN + 10 * MIN);
+  assert.equal(storedShutdown(device).session.durationMinutes, 10);
+  assert.equal(app.els.shutdownRemaining.textContent, '10:00');
+});
+
+test('shutdown M: changing sound updates the session', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.startShutdown();
+  await app.shutdownChoice('shutdownSound', 'shutdownSoundOptions', 'Rain');
+  assert.equal(storedShutdown(device).session.sound, 'rain');
+  assert.equal(app.els.shutdownSoundName.textContent, 'Rain');
+  assert.equal(storedShutdown(device).session.endsAt, T0 + 20 * MIN);
+});
+
+test('shutdown N: changing the transition updates the session', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.startShutdown();
+  await app.shutdownChoice('shutdownTransition', 'shutdownTransitionOptions', 'Gentle');
+  assert.equal(storedShutdown(device).session.transition, 'gentle');
+  assert.equal(storedShutdown(device).defaults.transition, 'gentle');
+});
+
+test('shutdown O: the next session uses the last duration, sound, and transition', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.startShutdown();
+  await app.shutdownChoice('shutdownTime', 'shutdownTimeOptions', '60 minutes');
+  await app.shutdownChoice('shutdownSound', 'shutdownSoundOptions', 'Ocean');
+  await app.shutdownChoice('shutdownTransition', 'shutdownTransitionOptions', 'Minimal');
+  await app.endShutdown();
+  device.now += 1000;
+  await app.startShutdown();
+  const saved = storedShutdown(device);
+  assert.equal(saved.session.durationMinutes, 60);
+  assert.equal(saved.session.sound, 'ocean');
+  assert.equal(saved.session.transition, 'minimal');
+  assert.equal(saved.session.endsAt, device.now + 60 * MIN);
+  assert.equal(saved.defaults.durationMinutes, 60);
+});
+
+test('shutdown P: corrupt Shutdown storage does not break launch', async () => {
+  for (const raw of ['not json', JSON.stringify([]), JSON.stringify({ session: { endsAt: 'soon' } })]) {
+    const device = newDevice(new Map([[SHUTDOWN_KEY, raw]]));
+    const app = await launch(device);
+    assert.equal(app.shutdownActive(), false, raw);
+    assert.equal(app.rows.length, 12, raw);
+    await app.startShutdown();
+    assert.equal(storedShutdown(device).session.durationMinutes, 20, raw);
+    assert.equal(storedShutdown(device).session.sound, 'brown-noise', raw);
+    assert.equal(storedShutdown(device).session.transition, 'immersive', raw);
   }
 });

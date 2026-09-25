@@ -47,6 +47,17 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 .fav[aria-pressed="true"]{color:var(--favorite)}
 .remove{height:44px;border:0;padding:0 2px;background:transparent;font:inherit;font-size:13px;font-weight:600;color:#ff453a;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .create{display:block;margin:22px 8px 4px;height:44px;border:0;padding:0 6px;background:transparent;color:var(--sheet-action);font:inherit;font-size:17px;font-weight:600;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.shutdown-entry{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:calc(100% - 16px);margin:0 8px 8px;padding:16px;border:0;border-radius:15px;background:var(--card);color:inherit;font:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.shutdown-entry-title{font-size:20px;font-weight:650}
+.shutdown-entry-sub{font-size:15px;color:var(--secondary)}
+.shutdown-view{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;padding:calc(36px + env(safe-area-inset-top)) 28px calc(28px + env(safe-area-inset-bottom));background:#0b0c10;color:#e5e5ea}
+.shutdown-view[hidden]{display:none}
+.shutdown-kicker{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#8e8e93}
+.shutdown-remaining{margin-top:10px;font-size:64px;font-weight:600;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.shutdown-meta{margin-top:8px;font-size:17px;color:#aeaeb2}
+.shutdown-actions{display:flex;flex-direction:column;gap:10px}
+.shutdown-action,.shutdown-end{height:52px;border:0;border-radius:14px;background:#1c1c1e;color:#f2f2f7;font:inherit;font-size:17px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.shutdown-end{background:transparent;color:#aeaeb2}
 .creator-form{max-height:min(640px,calc(100vh - 24px - env(safe-area-inset-top)));overflow:auto}
 .field{display:block;padding:8px 16px 10px;border-bottom:1px solid var(--divider)}
 .field-label{display:block;font-size:12px;font-weight:600;color:var(--secondary);margin-bottom:4px}
@@ -100,6 +111,10 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 </style></head>
 <body><div class="phone">
 <h1>Mel's Mind</h1><div class="sub">Your brain. Your settings.</div>
+<button id="shutdownEntry" class="shutdown-entry" type="button">
+  <span class="shutdown-entry-title">Shutdown</span>
+  <span class="shutdown-entry-sub">Shut it all off.</span>
+</button>
 <div id="notice" class="notice" role="status" aria-live="polite">
   <div id="noticeIcon" class="notice-icon">🧠</div>
   <div class="notice-copy">
@@ -144,6 +159,49 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
       <button id="deleterConfirm" class="chooser-option deleter-confirm" type="button">Delete</button>
     </div>
     <button id="deleterCancel" class="chooser-cancel" type="button">Cancel</button>
+  </div>
+</div>
+<div id="shutdownView" class="shutdown-view" hidden>
+  <div>
+    <div class="shutdown-kicker">Shutdown</div>
+    <div id="shutdownRemaining" class="shutdown-remaining" role="timer" aria-live="off" aria-atomic="true">20:00</div>
+    <div id="shutdownSoundName" class="shutdown-meta">Brown Noise</div>
+  </div>
+  <div class="shutdown-actions">
+    <button id="shutdownSoundButton" class="shutdown-action" type="button">Sound</button>
+    <button id="shutdownTimeButton" class="shutdown-action" type="button">Time</button>
+    <button id="shutdownTransitionButton" class="shutdown-action" type="button">Transition</button>
+    <button id="shutdownEnd" class="shutdown-end" type="button">End Shutdown</button>
+  </div>
+</div>
+<div id="shutdownTimeSheet" class="chooser" aria-hidden="true">
+  <div id="shutdownTimeBackdrop" class="chooser-backdrop"></div>
+  <div class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="shutdownTimeTitle">
+    <div class="chooser-group">
+      <div id="shutdownTimeTitle" class="chooser-title">Time</div>
+      <div id="shutdownTimeOptions"></div>
+    </div>
+    <button id="shutdownTimeCancel" class="chooser-cancel" type="button">Cancel</button>
+  </div>
+</div>
+<div id="shutdownSoundSheet" class="chooser" aria-hidden="true">
+  <div id="shutdownSoundBackdrop" class="chooser-backdrop"></div>
+  <div class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="shutdownSoundTitle">
+    <div class="chooser-group">
+      <div id="shutdownSoundTitle" class="chooser-title">Sound</div>
+      <div id="shutdownSoundOptions"></div>
+    </div>
+    <button id="shutdownSoundCancel" class="chooser-cancel" type="button">Cancel</button>
+  </div>
+</div>
+<div id="shutdownTransitionSheet" class="chooser" aria-hidden="true">
+  <div id="shutdownTransitionBackdrop" class="chooser-backdrop"></div>
+  <div class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="shutdownTransitionTitle">
+    <div class="chooser-group">
+      <div id="shutdownTransitionTitle" class="chooser-title">Transition</div>
+      <div id="shutdownTransitionOptions"></div>
+    </div>
+    <button id="shutdownTransitionCancel" class="chooser-cancel" type="button">Cancel</button>
   </div>
 </div>
 <script>
@@ -446,6 +504,7 @@ document.addEventListener('keydown',e=>{
   if(chooserFor)closeChooser();
   else if(deleteFor)closeDeleter();
   else if(creator.classList.contains('show'))closeCreator();
+  else if(shutdownSheet)closeShutdownSheet();
 });
 
 document.documentElement.classList.add('restoring');
@@ -686,22 +745,279 @@ deleterConfirm.onclick=confirmDelete;
 deleterCancel.onclick=closeDeleter;
 deleterBackdrop.onclick=closeDeleter;
 
+const SHUTDOWN_KEY='toggle.shutdown.v1';
+const SHUTDOWN_MINUTES=[10,20,30,60];
+const SHUTDOWN_SOUNDS=[
+  {id:'brown-noise',name:'Brown Noise'},
+  {id:'rain',name:'Rain'},
+  {id:'ocean',name:'Ocean'},
+  {id:'quiet',name:'Quiet'}
+];
+const SHUTDOWN_TRANSITIONS=[
+  {id:'immersive',name:'Immersive'},
+  {id:'gentle',name:'Gentle'},
+  {id:'minimal',name:'Minimal'}
+];
+const SHUTDOWN_FACTORY={durationMinutes:20,sound:'brown-noise',transition:'immersive'};
+const shutdownView=document.getElementById('shutdownView');
+const shutdownRemaining=document.getElementById('shutdownRemaining');
+const shutdownSoundName=document.getElementById('shutdownSoundName');
+const shutdownEntry=document.getElementById('shutdownEntry');
+let shutdownState={defaults:{...SHUTDOWN_FACTORY},session:null};
+let shutdownTimer=null;
+let shutdownSheet=null;
+
+function shutdownName(list,id){
+  const found=list.find(item=>item.id===id);
+  return found?found.name:null;
+}
+
+function validShutdownChoice(value,list,fallback){
+  return list.some(item=>item.id===value)?value:fallback;
+}
+
+function validShutdownDefaults(value){
+  const source=value&&typeof value==='object'?value:{};
+  const duration=SHUTDOWN_MINUTES.includes(source.durationMinutes)?source.durationMinutes:SHUTDOWN_FACTORY.durationMinutes;
+  return {
+    durationMinutes:duration,
+    sound:validShutdownChoice(source.sound,SHUTDOWN_SOUNDS,SHUTDOWN_FACTORY.sound),
+    transition:validShutdownChoice(source.transition,SHUTDOWN_TRANSITIONS,SHUTDOWN_FACTORY.transition)
+  };
+}
+
+function validShutdownSession(value){
+  if(!value||typeof value!=='object'||typeof value.endsAt!=='number'||!Number.isFinite(value.endsAt))return null;
+  const defaults=validShutdownDefaults(value);
+  return {...defaults,endsAt:value.endsAt};
+}
+
+const shutdownStore={
+  async load(){
+    try{
+      const parsed=await storage.read(SHUTDOWN_KEY);
+      if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return {defaults:{...SHUTDOWN_FACTORY},session:null};
+      return {defaults:validShutdownDefaults(parsed.defaults),session:validShutdownSession(parsed.session)};
+    }catch(err){
+      return {defaults:{...SHUTDOWN_FACTORY},session:null};
+    }
+  },
+  save(){
+    return storage.write(SHUTDOWN_KEY,{defaults:shutdownState.defaults,session:shutdownState.session});
+  }
+};
+
+function formatRemaining(ms){
+  const total=Math.max(0,Math.ceil(ms/1000));
+  const minutes=Math.floor(total/60);
+  const seconds=total%60;
+  return `${minutes}:${String(seconds).padStart(2,'0')}`;
+}
+
+function renderShutdown(){
+  const session=shutdownState.session;
+  if(!session)return;
+  const remaining=session.endsAt-Date.now();
+  shutdownRemaining.textContent=formatRemaining(remaining);
+  shutdownRemaining.setAttribute('aria-label',`${formatRemaining(remaining)} remaining`);
+  const sound=shutdownName(SHUTDOWN_SOUNDS,session.sound);
+  const transition=shutdownName(SHUTDOWN_TRANSITIONS,session.transition);
+  shutdownSoundName.textContent=sound;
+  document.getElementById('shutdownSoundButton').textContent=`Sound · ${sound}`;
+  document.getElementById('shutdownTimeButton').textContent=`Time · ${session.durationMinutes} minutes`;
+  document.getElementById('shutdownTransitionButton').textContent=`Transition · ${transition}`;
+}
+
+function showShutdown(){
+  shutdownView.hidden=false;
+  shutdownView.setAttribute('aria-hidden','false');
+  phone.hidden=true;
+  phone.setAttribute('aria-hidden','true');
+  renderShutdown();
+}
+
+function showMain(){
+  shutdownView.hidden=true;
+  shutdownView.setAttribute('aria-hidden','true');
+  phone.hidden=false;
+  phone.removeAttribute('aria-hidden');
+}
+
+function scheduleShutdownTick(){
+  clearTimeout(shutdownTimer);
+  shutdownTimer=null;
+  if(!shutdownState.session)return;
+  const remaining=shutdownState.session.endsAt-Date.now();
+  if(remaining<=0){
+    endShutdown(false);
+    return;
+  }
+  shutdownTimer=setTimeout(()=>{
+    if(!shutdownState.session)return;
+    if(shutdownState.session.endsAt<=Date.now())endShutdown(false);
+    else{
+      renderShutdown();
+      scheduleShutdownTick();
+    }
+  },Math.min(1000,remaining));
+}
+
+function closeShutdownSheet(){
+  if(!shutdownSheet)return;
+  shutdownSheet.classList.remove('show');
+  shutdownSheet.setAttribute('aria-hidden','true');
+  shutdownSheet=null;
+}
+
+function openShutdownSheet(sheet){
+  if(!shutdownState.session)return;
+  closeShutdownSheet();
+  shutdownSheet=sheet;
+  sheet.classList.add('show');
+  sheet.setAttribute('aria-hidden','false');
+  const first=sheet.querySelector('button');
+  if(first)first.focus({preventScroll:true});
+}
+
+function beginShutdown(){
+  if(!ready||shutdownState.session)return;
+  const defaults=shutdownState.defaults;
+  shutdownState.session={
+    endsAt:Date.now()+defaults.durationMinutes*60000,
+    durationMinutes:defaults.durationMinutes,
+    sound:defaults.sound,
+    transition:defaults.transition
+  };
+  shutdownStore.save();
+  showShutdown();
+  scheduleShutdownTick();
+}
+
+// Changing the duration restarts from now. The session ends at the moment of the change plus the newly chosen length.
+function setShutdownDuration(minutes){
+  if(!shutdownState.session||!SHUTDOWN_MINUTES.includes(minutes))return;
+  shutdownState.session.endsAt=Date.now()+minutes*60000;
+  shutdownState.session.durationMinutes=minutes;
+  shutdownState.defaults.durationMinutes=minutes;
+  shutdownStore.save();
+  closeShutdownSheet();
+  renderShutdown();
+  scheduleShutdownTick();
+}
+
+function setShutdownSound(id){
+  if(!shutdownState.session||!shutdownName(SHUTDOWN_SOUNDS,id))return;
+  shutdownState.session.sound=id;
+  shutdownState.defaults.sound=id;
+  shutdownStore.save();
+  closeShutdownSheet();
+  renderShutdown();
+}
+
+function setShutdownTransition(id){
+  if(!shutdownState.session||!shutdownName(SHUTDOWN_TRANSITIONS,id))return;
+  shutdownState.session.transition=id;
+  shutdownState.defaults.transition=id;
+  shutdownStore.save();
+  closeShutdownSheet();
+  renderShutdown();
+}
+
+function endShutdown(manual){
+  closeShutdownSheet();
+  clearTimeout(shutdownTimer);
+  shutdownTimer=null;
+  shutdownState.session=null;
+  shutdownStore.save();
+  showMain();
+  if(manual)haptic('LIGHT');
+}
+
+function reconcileShutdown(){
+  const session=shutdownState.session;
+  if(!session){
+    showMain();
+    return;
+  }
+  if(session.endsAt<=Date.now()){
+    endShutdown(false);
+    return;
+  }
+  showShutdown();
+  scheduleShutdownTick();
+}
+
+function fillShutdownOptions(container,items,current,onPick){
+  items.forEach(item=>{
+    const button=el('button','chooser-option',item.label);
+    button.type='button';
+    button.setAttribute('aria-pressed',String(item.id===current));
+    button.onclick=()=>onPick(item.id);
+    container.appendChild(button);
+  });
+}
+
+function refillShutdownSheet(container,items,current,onPick){
+  container.replaceChildren();
+  fillShutdownOptions(container,items,current,onPick);
+}
+
+shutdownEntry.onclick=beginShutdown;
+document.getElementById('shutdownEnd').onclick=()=>endShutdown(true);
+document.getElementById('shutdownTimeButton').onclick=()=>{
+  refillShutdownSheet(
+    document.getElementById('shutdownTimeOptions'),
+    SHUTDOWN_MINUTES.map(minutes=>({id:minutes,label:`${minutes} minutes`})),
+    shutdownState.session&&shutdownState.session.durationMinutes,
+    setShutdownDuration
+  );
+  openShutdownSheet(document.getElementById('shutdownTimeSheet'));
+};
+document.getElementById('shutdownSoundButton').onclick=()=>{
+  refillShutdownSheet(
+    document.getElementById('shutdownSoundOptions'),
+    SHUTDOWN_SOUNDS.map(sound=>({id:sound.id,label:sound.name})),
+    shutdownState.session&&shutdownState.session.sound,
+    setShutdownSound
+  );
+  openShutdownSheet(document.getElementById('shutdownSoundSheet'));
+};
+document.getElementById('shutdownTransitionButton').onclick=()=>{
+  refillShutdownSheet(
+    document.getElementById('shutdownTransitionOptions'),
+    SHUTDOWN_TRANSITIONS.map(style=>({id:style.id,label:style.name})),
+    shutdownState.session&&shutdownState.session.transition,
+    setShutdownTransition
+  );
+  openShutdownSheet(document.getElementById('shutdownTransitionSheet'));
+};
+['shutdownTimeCancel','shutdownSoundCancel','shutdownTransitionCancel','shutdownTimeBackdrop','shutdownSoundBackdrop','shutdownTransitionBackdrop'].forEach(id=>{
+  document.getElementById(id).onclick=closeShutdownSheet;
+});
+
 items.forEach(i=>makeSwitch(i,false));
 
-Promise.all([store.load(),customStore.load()]).then(([saved,savedCustoms])=>{
+Promise.all([store.load(),customStore.load(),shutdownStore.load()]).then(([saved,savedCustoms,savedShutdown])=>{
   customs=savedCustoms;
   customs.forEach(rec=>makeSwitch({...rec,section:'mine'},true));
   renderMine();
+  shutdownState=savedShutdown;
   return favoriteStore.load().then(savedFavorites=>{
     expirations=saved;
     favorites=savedFavorites;
     reconcile();
     renderQuickAccess();
+    reconcileShutdown();
     ready=true;
     requestAnimationFrame(()=>requestAnimationFrame(()=>document.documentElement.classList.remove('restoring')));
   });
 });
 
-if(App)App.addListener('appStateChange',state=>{if(state.isActive&&ready)reconcile();});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&ready)reconcile();});
+function onForeground(){
+  if(!ready)return;
+  reconcile();
+  reconcileShutdown();
+}
+if(App)App.addListener('appStateChange',state=>{if(state.isActive)onForeground();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')onForeground();});
 </script></body></html>
