@@ -27,6 +27,10 @@
   --banner-app:#f2f2f7;
   --banner-title:#ffffff;
   --banner-message:#d1d1d6;
+  --sheet-bg:rgba(44,44,46,.84);
+  --sheet-cancel-bg:#2c2c2e;
+  --sheet-action:#0a84ff;
+  --sheet-pressed:rgba(255,255,255,.1);
 }
 body{margin:0;background:var(--page-bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial;display:flex;justify-content:center;padding:30px}
 .phone{width:390px;min-height:800px;background:var(--phone-bg);border-radius:45px;padding:21px;box-sizing:border-box;box-shadow:0 0 40px rgba(0,0,0,.78)}
@@ -41,6 +45,18 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 .notice.show{opacity:1;transform:translate(-50%,0)}
 .notice-icon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:20px;line-height:1;background:#5856d6}
 .notice-copy{min-width:0}.notice-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}.notice-app{font-size:12px;font-weight:600;color:var(--banner-app)}.notice-time{font-size:11px;color:var(--secondary)}.notice-title{font-size:14px;line-height:1.2;font-weight:600;color:var(--banner-title);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.notice-message{margin-top:4px;font-size:13px;line-height:1.3;color:var(--banner-message)}
+.chooser{position:fixed;inset:0;z-index:30;visibility:hidden;transition:visibility 0s linear .3s}
+.chooser.show{visibility:visible;transition-delay:0s}
+.chooser-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.4);opacity:0;transition:opacity .3s ease}
+.chooser.show .chooser-backdrop{opacity:1}
+.chooser-sheet{position:absolute;left:50%;bottom:0;width:min(400px,100%);box-sizing:border-box;padding:0 calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));transform:translate(-50%,100%);transition:transform .3s cubic-bezier(.2,.9,.25,1)}
+.chooser.show .chooser-sheet{transform:translate(-50%,0)}
+.chooser-group{background:var(--sheet-bg);border-radius:14px;overflow:hidden;margin-bottom:8px;backdrop-filter:blur(26px) saturate(145%);-webkit-backdrop-filter:blur(26px) saturate(145%)}
+.chooser-title{padding:14px 16px;text-align:center;font-size:13px;font-weight:600;line-height:1.3;color:var(--secondary);border-bottom:1px solid var(--divider)}
+.chooser-option,.chooser-cancel{display:block;width:100%;height:57px;border:0;padding:0;background:transparent;font:inherit;font-size:20px;color:var(--sheet-action);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.chooser-option+.chooser-option{border-top:1px solid var(--divider)}
+.chooser-cancel{background:var(--sheet-cancel-bg);border-radius:14px;font-weight:600}
+.chooser-option:active,.chooser-cancel:active{background-image:linear-gradient(var(--sheet-pressed),var(--sheet-pressed))}
 @media(prefers-color-scheme:light){
   :root{
     --page-bg:#e5e5ea;
@@ -57,6 +73,10 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
     --banner-app:#3c3c43;
     --banner-title:#000000;
     --banner-message:#3c3c43;
+    --sheet-bg:rgba(248,248,250,.86);
+    --sheet-cancel-bg:#ffffff;
+    --sheet-action:#007aff;
+    --sheet-pressed:rgba(0,0,0,.06);
   }
   .phone{box-shadow:0 0 40px rgba(0,0,0,.18)}
 }
@@ -74,6 +94,16 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 </div>
 <div class="section">Mind Alerts</div><div class="card" id="mind"></div>
 <div class="section">Boundaries</div><div class="card" id="bounds"></div>
+</div>
+<div id="chooser" class="chooser" aria-hidden="true">
+  <div id="chooserBackdrop" class="chooser-backdrop"></div>
+  <div class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="chooserTitle">
+    <div class="chooser-group">
+      <div id="chooserTitle" class="chooser-title">Pause for…</div>
+      <div id="chooserOptions"></div>
+    </div>
+    <button id="chooserCancel" class="chooser-cancel" type="button">Cancel</button>
+  </div>
 </div>
 <script>
 const items=[
@@ -95,8 +125,15 @@ const noticeIcon=document.getElementById('noticeIcon');
 const noticeTitle=document.getElementById('noticeTitle');
 const noticeMessage=document.getElementById('noticeMessage');
 let noticeTimer;
+const phone=document.querySelector('.phone');
+const chooser=document.getElementById('chooser');
+const chooserBackdrop=document.getElementById('chooserBackdrop');
+const chooserTitle=document.getElementById('chooserTitle');
+const chooserOptions=document.getElementById('chooserOptions');
+const chooserCancel=document.getElementById('chooserCancel');
+let chooserFor=null;
 
-const RESET_MS=120000;
+const DURATION_MINUTES=[2,5,15,30];
 const STORE_KEY='toggle.expirations.v1';
 const plugins=(window.Capacitor&&window.Capacitor.Plugins)||{};
 const Preferences=plugins.Preferences;
@@ -165,6 +202,56 @@ function reconcile(){
   if(changed)store.save();
 }
 
+function pause(s,durationMs){
+  const i=s.item;
+  const expiresAt=Date.now()+durationMs;
+  expirations[s.id]=expiresAt;
+  store.save();
+  setOff(s,expiresAt);
+  haptic('MEDIUM');
+  noticeIcon.textContent=i.icon;
+  noticeTitle.textContent=i.name;
+  noticeMessage.textContent=i.message;
+  clearTimeout(noticeTimer);
+  notice.classList.remove('show');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>notice.classList.add('show')));
+  noticeTimer=setTimeout(()=>notice.classList.remove('show'),4500);
+}
+
+function openChooser(s){
+  chooserFor=s;
+  chooserTitle.textContent=`Pause ${s.item.name} for…`;
+  chooser.classList.add('show');
+  chooser.setAttribute('aria-hidden','false');
+  phone.inert=true;
+  chooserOptions.children[0].focus({preventScroll:true});
+}
+
+function closeChooser(){
+  const s=chooserFor;
+  chooserFor=null;
+  chooser.classList.remove('show');
+  chooser.setAttribute('aria-hidden','true');
+  phone.inert=false;
+  if(s)s.toggle.focus({preventScroll:true});
+  return s;
+}
+
+DURATION_MINUTES.forEach(minutes=>{
+  const b=document.createElement('button');
+  b.type='button';
+  b.className='chooser-option';
+  b.textContent=`${minutes} minutes`;
+  b.onclick=()=>{
+    const s=closeChooser();
+    if(s&&!s.toggle.classList.contains('off'))pause(s,minutes*60000);
+  };
+  chooserOptions.appendChild(b);
+});
+chooserCancel.onclick=closeChooser;
+chooserBackdrop.onclick=closeChooser;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&chooserFor)closeChooser();});
+
 document.documentElement.classList.add('restoring');
 
 items.forEach(i=>{
@@ -190,18 +277,7 @@ items.forEach(i=>{
       return;
     }
 
-    const expiresAt=Date.now()+RESET_MS;
-    expirations[s.id]=expiresAt;
-    store.save();
-    setOff(s,expiresAt);
-    haptic('MEDIUM');
-    noticeIcon.textContent=i.icon;
-    noticeTitle.textContent=i.name;
-    noticeMessage.textContent=i.message;
-    clearTimeout(noticeTimer);
-    notice.classList.remove('show');
-    requestAnimationFrame(()=>requestAnimationFrame(()=>notice.classList.add('show')));
-    noticeTimer=setTimeout(()=>notice.classList.remove('show'),4500);
+    openChooser(s);
   };
   document.getElementById(i.section).appendChild(r);
 });
