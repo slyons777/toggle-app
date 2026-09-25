@@ -23,18 +23,29 @@ class FakeElement {
     };
   }
   set className(v) { this.cls = new Set(v.split(/\s+/).filter(Boolean)); }
-  set innerHTML(markup) {
-    this.label = markup.match(/<\/span>([^<]*)<\/div>/)[1];
-    this.button = new FakeElement();
-    this.button.cls.add('toggle');
-    this.button.attrs['aria-label'] = markup.match(/aria-label="([^"]*)"/)[1];
-  }
-  querySelector(sel) { return sel === 'button' ? this.button : null; }
+  get className() { return [...this.cls].join(' '); }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return this.attrs[k]; }
-  appendChild(c) { this.children.push(c); }
+  appendChild(c) {
+    if (c.parent) c.parent.children = c.parent.children.filter(x => x !== c);
+    c.parent = this;
+    this.children.push(c);
+  }
+  replaceChildren(...nodes) {
+    this.children.forEach(c => { c.parent = null; });
+    this.children = [];
+    nodes.forEach(n => this.appendChild(n));
+  }
   focus() { FakeElement.focused = this; }
 }
+
+// Row structure built by the app: row > [name > [icon, label], controls > [fav, toggle]].
+const rowParts = row => ({
+  row,
+  label: row.children[0].children[1].textContent,
+  fav: row.children[1].children[0],
+  button: row.children[1].children[1],
+});
 
 const tick = () => new Promise(r => setImmediate(r));
 
@@ -48,6 +59,7 @@ async function launch(device, { native = true, source = script, haptics: hapticM
     [
       'notice', 'noticeIcon', 'noticeTitle', 'noticeMessage', 'mind', 'bounds',
       'chooser', 'chooserBackdrop', 'chooserTitle', 'chooserOptions', 'chooserCancel',
+      'quickAccess', 'quick',
     ].map(id => [id, new FakeElement()])
   );
   const documentElement = new FakeElement();
@@ -96,12 +108,15 @@ async function launch(device, { native = true, source = script, haptics: hapticM
   vm.runInContext(source, context);
   await tick();
 
-  const rows = [...els.mind.children, ...els.bounds.children];
-  const button = name => {
-    const row = rows.find(r => r.label === name);
-    assert.ok(row, `no switch named ${name}`);
-    return row.button;
+  const rows = [...els.mind.children, ...els.bounds.children].map(rowParts);
+  const quickRows = () => els.quick.children.map(rowParts);
+  const find = (list, name, where) => {
+    const row = list.find(r => r.label === name);
+    assert.ok(row, `no ${where} row named ${name}`);
+    return row;
   };
+  const button = name => find(rows, name, 'normal').button;
+  const quickButton = name => find(quickRows(), name, 'Quick Access').button;
 
   const app = {
     items: vm.runInContext('items', context),
@@ -113,9 +128,18 @@ async function launch(device, { native = true, source = script, haptics: hapticM
     offNames: () => rows.filter(r => r.button.classList.contains('off')).map(r => r.label),
     phone,
     button,
+    quickButton,
+    quickNames: () => quickRows().map(r => r.label),
+    quickVisible: () => els.quickAccess.hidden === false && els.quick.children.length > 0,
+    favButton: (name, where = 'normal') =>
+      (where === 'quick' ? find(quickRows(), name, 'Quick Access') : find(rows, name, 'normal')).fav,
+    tapFavorite: async (name, where = 'normal') => { app.favButton(name, where).onclick(); await tick(); },
+    isQuickOff: name => quickButton(name).classList.contains('off'),
+    pressQuick: async name => { quickButton(name).onclick(); await tick(); },
+    pendingTimers: () => timers.size,
     focused: () => FakeElement.focused,
     // Raw tap on a switch, exactly what the user's finger does.
-    press: async name => { const b = button(name); b.onclick({ currentTarget: b }); await tick(); },
+    press: async name => { const b = button(name); b.onclick(); await tick(); },
     // Full user action: ON -> choose a duration -> OFF, or OFF -> ON.
     toggle: async (name, minutes = 2) => {
       const wasOff = app.isOff(name);
@@ -529,4 +553,223 @@ test('durations: the chooser works in the plain browser fallback', async () => {
   await app.choose('15 minutes');
   assert.equal(app.isOff('Need to Know'), true);
   assert.deepEqual(stored(device), { 'need-to-know': T0 + 15 * MIN });
+});
+
+const FAV_KEY = 'toggle.favorites.v1';
+const storedFavs = device => JSON.parse(device.storage.get(FAV_KEY) ?? 'null');
+
+test('favorites A: favoriting a switch persists its stable ID', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  const star = app.favButton('Overthinking');
+  assert.equal(app.quickVisible(), false, 'no empty Quick Access section');
+  assert.equal(star.textContent, '☆');
+  assert.equal(star.getAttribute('aria-pressed'), 'false');
+  assert.equal(star.getAttribute('aria-label'), 'Add Overthinking to favorites');
+  assert.equal(device.storage.has(FAV_KEY), false);
+
+  await app.tapFavorite('Overthinking');
+  assert.deepEqual(storedFavs(device), ['overthinking']);
+  assert.equal(star.textContent, '★');
+  assert.equal(star.getAttribute('aria-pressed'), 'true');
+  assert.equal(star.getAttribute('aria-label'), 'Remove Overthinking from favorites');
+  assert.equal(app.quickVisible(), true);
+  assert.deepEqual(app.quickNames(), ['Overthinking']);
+  assert.equal(app.favButton('Overthinking', 'quick').textContent, '★');
+});
+
+test('favorites B: favorites restore after relaunch', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.tapFavorite('Mental Noise');
+  await app.tapFavorite('Access');
+
+  const relaunched = await launch(device);
+  assert.equal(relaunched.quickVisible(), true);
+  assert.deepEqual(relaunched.quickNames(), ['Mental Noise', 'Access']);
+  assert.equal(relaunched.favButton('Access').getAttribute('aria-pressed'), 'true');
+  assert.equal(relaunched.favButton('Overthinking').getAttribute('aria-pressed'), 'false');
+});
+
+test('favorites C: unfavoriting removes only that favorite (from either row)', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  for (const name of ['Overthinking', 'Mental Noise', 'Access']) await app.tapFavorite(name);
+
+  await app.tapFavorite('Mental Noise');
+  assert.deepEqual(storedFavs(device), ['overthinking', 'access']);
+  assert.deepEqual(app.quickNames(), ['Overthinking', 'Access']);
+  assert.equal(app.favButton('Mental Noise').textContent, '☆');
+
+  await app.tapFavorite('Access', 'quick');
+  assert.deepEqual(storedFavs(device), ['overthinking']);
+  assert.deepEqual(app.quickNames(), ['Overthinking']);
+  assert.equal(app.focused(), app.favButton('Access'), 'focus moves to the remaining star');
+
+  await app.tapFavorite('Overthinking', 'quick');
+  assert.deepEqual(storedFavs(device), []);
+  assert.equal(app.quickVisible(), false);
+});
+
+test('favorites D: favorite order is preserved', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  for (const name of ['Access', 'Overthinking', 'Feeling Obligated', 'Spiraling']) await app.tapFavorite(name);
+  assert.deepEqual(app.quickNames(), ['Access', 'Overthinking', 'Feeling Obligated', 'Spiraling']);
+  assert.deepEqual(storedFavs(device), ['access', 'overthinking', 'feeling-obligated', 'spiraling']);
+
+  await app.tapFavorite('Overthinking');
+  await app.tapFavorite('Overthinking');
+  assert.deepEqual(app.quickNames(), ['Access', 'Feeling Obligated', 'Spiraling', 'Overthinking']);
+
+  const relaunched = await launch(device);
+  assert.deepEqual(relaunched.quickNames(), ['Access', 'Feeling Obligated', 'Spiraling', 'Overthinking']);
+});
+
+test('favorites E: favoriting does not alter switch state, timers, banner or haptics', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.toggle('Spiraling', 15);
+  await app.runFor(100);
+  const before = {
+    off: app.offNames(),
+    expirations: device.storage.get(KEY),
+    timers: app.pendingTimers(),
+    haptics: [...app.haptics],
+    bannerShown: app.els.notice.classList.contains('show'),
+    bannerTitle: app.els.noticeTitle.textContent,
+  };
+  assert.equal(before.bannerShown, true);
+
+  for (const name of ['Spiraling', 'Assuming', 'Spiraling', 'Assuming', 'Spiraling']) await app.tapFavorite(name);
+  await app.tapFavorite('Spiraling', 'quick');
+  await app.tapFavorite('Spiraling');
+
+  assert.deepEqual(app.offNames(), before.off);
+  assert.equal(device.storage.get(KEY), before.expirations);
+  assert.equal(app.pendingTimers(), before.timers);
+  assert.deepEqual(app.haptics, before.haptics);
+  assert.equal(app.els.notice.classList.contains('show'), before.bannerShown);
+  assert.equal(app.els.noticeTitle.textContent, before.bannerTitle);
+  assert.equal(app.chooserOpen(), false, 'favoriting never opens the duration chooser');
+  assert.equal(app.isOff('Assuming'), false);
+});
+
+test('favorites F: a favorited OFF switch shows OFF in Quick Access and its normal section', async () => {
+  const device = newDevice(new Map([
+    [KEY, JSON.stringify({ overthinking: T0 + 5 * MIN })],
+    [FAV_KEY, JSON.stringify(['overthinking', 'access'])],
+  ]));
+  const app = await launch(device);
+  assert.equal(app.isOff('Overthinking'), true);
+  assert.equal(app.isQuickOff('Overthinking'), true);
+  assert.equal(app.quickButton('Overthinking').getAttribute('aria-label'), 'Turn on Overthinking');
+  assert.equal(app.isOff('Access'), false);
+  assert.equal(app.isQuickOff('Access'), false);
+});
+
+test('favorites G: pausing from Quick Access updates the normal representation', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.tapFavorite('Rabbit Hole');
+
+  await app.pressQuick('Rabbit Hole');
+  assert.equal(app.chooserTitle(), 'Pause Rabbit Hole for…');
+  assert.deepEqual(app.haptics, []);
+  await app.choose('5 minutes');
+
+  assert.equal(app.isQuickOff('Rabbit Hole'), true);
+  assert.equal(app.isOff('Rabbit Hole'), true);
+  assert.equal(app.button('Rabbit Hole').getAttribute('aria-label'), 'Turn on Rabbit Hole');
+  assert.deepEqual(stored(device), { 'rabbit-hole': T0 + 5 * MIN }, 'one timer keyed by the stable ID');
+  assert.deepEqual(app.haptics, ['MEDIUM']);
+  assert.equal(app.els.noticeTitle.textContent, 'Rabbit Hole');
+  assert.equal(app.focused(), app.quickButton('Rabbit Hole'), 'focus returns to the tapped copy');
+});
+
+test('favorites H: manually restoring from Quick Access updates the normal representation', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.tapFavorite('Self-Criticism');
+  await app.toggle('Self-Criticism', 30);
+  assert.equal(app.isQuickOff('Self-Criticism'), true);
+  app.haptics.length = 0;
+
+  await app.pressQuick('Self-Criticism');
+  assert.equal(app.chooserOpen(), false);
+  assert.equal(app.isQuickOff('Self-Criticism'), false);
+  assert.equal(app.isOff('Self-Criticism'), false);
+  assert.deepEqual(stored(device), {});
+  assert.deepEqual(app.haptics, ['LIGHT']);
+});
+
+test('favorites I: automatic timer expiry updates both representations', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.tapFavorite('Assuming');
+  await app.tapFavorite('Access');
+  await app.toggle('Assuming', 2);
+  await app.pressQuick('Access');
+  await app.choose('5 minutes');
+  app.haptics.length = 0;
+
+  await app.runFor(2 * MIN);
+  assert.equal(app.isOff('Assuming'), false);
+  assert.equal(app.isQuickOff('Assuming'), false);
+  assert.equal(app.isOff('Access'), true);
+  assert.equal(app.isQuickOff('Access'), true);
+
+  await app.suspendFor(3 * MIN);
+  await app.resume();
+  assert.equal(app.isOff('Access'), false);
+  assert.equal(app.isQuickOff('Access'), false);
+  assert.deepEqual(stored(device), {});
+  assert.deepEqual(app.haptics, []);
+});
+
+test('favorites J: unfavoriting an actively paused switch does not cancel or alter its timer', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.tapFavorite('Savior Mode');
+  await app.pressQuick('Savior Mode');
+  await app.choose('15 minutes');
+  const timers = app.pendingTimers();
+
+  await app.tapFavorite('Savior Mode', 'quick');
+  assert.deepEqual(app.quickNames(), []);
+  assert.equal(app.isOff('Savior Mode'), true);
+  assert.deepEqual(stored(device), { 'savior-mode': T0 + 15 * MIN });
+  assert.equal(app.pendingTimers(), timers);
+
+  await app.tapFavorite('Savior Mode');
+  assert.equal(app.isQuickOff('Savior Mode'), true, 're-favorited copy shows the live state');
+
+  await app.runFor(15 * MIN - 1);
+  assert.equal(app.isOff('Savior Mode'), true);
+  await app.runFor(1);
+  assert.equal(app.isOff('Savior Mode'), false);
+  assert.equal(app.isQuickOff('Savior Mode'), false);
+  assert.deepEqual(stored(device), {});
+});
+
+test('favorites K: unknown or corrupt favorite data does not break launch', async () => {
+  const cases = [
+    ['not json', []],
+    [JSON.stringify({ overthinking: true }), []],
+    [JSON.stringify('overthinking'), []],
+    [JSON.stringify([1, null, 'nope', 'constructor', 'overthinking', 'overthinking', 'access']), ['Overthinking', 'Access']],
+  ];
+  for (const [raw, expected] of cases) {
+    const device = newDevice(new Map([
+      [FAV_KEY, raw],
+      [KEY, JSON.stringify({ spiraling: T0 + MIN })],
+    ]));
+    const app = await launch(device);
+    assert.deepEqual(app.quickNames(), expected, raw);
+    assert.equal(app.quickVisible(), expected.length > 0, raw);
+    assert.deepEqual(app.offNames(), ['Spiraling'], `timers still restore: ${raw}`);
+
+    await app.tapFavorite('Need to Know');
+    assert.deepEqual(app.quickNames(), [...expected, 'Need to Know'], raw);
+  }
 });

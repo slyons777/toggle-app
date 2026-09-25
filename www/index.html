@@ -31,6 +31,7 @@
   --sheet-cancel-bg:#2c2c2e;
   --sheet-action:#0a84ff;
   --sheet-pressed:rgba(255,255,255,.1);
+  --favorite:#ffd60a;
 }
 body{margin:0;background:var(--page-bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial;display:flex;justify-content:center;padding:30px}
 .phone{width:390px;min-height:800px;background:var(--phone-bg);border-radius:45px;padding:21px;box-sizing:border-box;box-shadow:0 0 40px rgba(0,0,0,.78)}
@@ -41,6 +42,9 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 .row:last-child{border:0}.name{display:flex;align-items:center;gap:11px;font-size:16px}.icon{width:24px;text-align:center;font-size:20px;line-height:1}
 .toggle{width:49px;height:29px;border-radius:18px;background:#34c759;position:relative;border:0;padding:0;cursor:pointer;transition:background-color .18s ease}.toggle.off{background:var(--toggle-off)}.knob{width:25px;height:25px;background:#fff;border-radius:50%;position:absolute;top:2px;right:2px;box-shadow:0 1px 3px rgba(0,0,0,.42);transition:transform .18s ease}.toggle.off .knob{right:2px;transform:translateX(-20px)}
 .restoring .toggle,.restoring .knob{transition:none}
+.controls{display:flex;align-items:center;gap:4px}
+.fav{width:44px;height:44px;border:0;padding:0;background:transparent;font:inherit;font-size:21px;line-height:1;color:var(--secondary);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.fav[aria-pressed="true"]{color:var(--favorite)}
 .notice{position:fixed;z-index:20;top:18px;left:50%;width:min(340px,calc(100vw - 28px));box-sizing:border-box;display:grid;grid-template-columns:38px minmax(0,1fr);gap:11px;align-items:start;padding:13px 13px 14px;border:1px solid var(--banner-border);border-radius:19px;background:var(--banner-bg);box-shadow:inset 0 1px 0 var(--banner-highlight),0 12px 34px var(--banner-shadow);backdrop-filter:blur(26px) saturate(145%);-webkit-backdrop-filter:blur(26px) saturate(145%);opacity:0;pointer-events:none;transform:translate(-50%,-130%);transition:transform .36s cubic-bezier(.2,.9,.25,1.18),opacity .24s ease}
 .notice.show{opacity:1;transform:translate(-50%,0)}
 .notice-icon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:20px;line-height:1;background:#5856d6}
@@ -77,6 +81,7 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
     --sheet-cancel-bg:#ffffff;
     --sheet-action:#007aff;
     --sheet-pressed:rgba(0,0,0,.06);
+    --favorite:#ffcc00;
   }
   .phone{box-shadow:0 0 40px rgba(0,0,0,.18)}
 }
@@ -92,6 +97,7 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
     <div id="noticeMessage" class="notice-message">You don't need to solve this right now.</div>
   </div>
 </div>
+<div id="quickAccess" hidden><div class="section">Quick Access</div><div class="card" id="quick"></div></div>
 <div class="section">Mind Alerts</div><div class="card" id="mind"></div>
 <div class="section">Boundaries</div><div class="card" id="bounds"></div>
 </div>
@@ -132,34 +138,64 @@ const chooserTitle=document.getElementById('chooserTitle');
 const chooserOptions=document.getElementById('chooserOptions');
 const chooserCancel=document.getElementById('chooserCancel');
 let chooserFor=null;
+let chooserReturnFocus=null;
+const quickAccess=document.getElementById('quickAccess');
+const quickCard=document.getElementById('quick');
 
 const DURATION_MINUTES=[2,5,15,30];
 const STORE_KEY='toggle.expirations.v1';
+const FAVORITES_KEY='toggle.favorites.v1';
 const plugins=(window.Capacitor&&window.Capacitor.Plugins)||{};
 const Preferences=plugins.Preferences;
 const App=plugins.App;
 const Haptics=plugins.Haptics;
 let expirations={};
+let favorites=[];
 let saving=Promise.resolve();
 let ready=false;
 const switches=[];
+const switchesById=new Map();
+
+const storage={
+  async read(key){
+    const raw=Preferences?(await Preferences.get({key})).value:localStorage.getItem(key);
+    return raw?JSON.parse(raw):null;
+  },
+  write(key,data){
+    const value=JSON.stringify(data);
+    saving=saving
+      .then(()=>Preferences?Preferences.set({key,value}):localStorage.setItem(key,value))
+      .catch(()=>{});
+    return saving;
+  }
+};
 
 const store={
   async load(){
     try{
-      const raw=Preferences?(await Preferences.get({key:STORE_KEY})).value:localStorage.getItem(STORE_KEY);
-      const parsed=raw?JSON.parse(raw):{};
+      const parsed=await storage.read(STORE_KEY);
       return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:{};
     }catch(err){
       return {};
     }
   },
   save(){
-    const value=JSON.stringify(expirations);
-    saving=saving
-      .then(()=>Preferences?Preferences.set({key:STORE_KEY,value}):localStorage.setItem(STORE_KEY,value))
-      .catch(()=>{});
-    return saving;
+    return storage.write(STORE_KEY,expirations);
+  }
+};
+
+const favoriteStore={
+  async load(){
+    try{
+      const parsed=await storage.read(FAVORITES_KEY);
+      if(!Array.isArray(parsed))return [];
+      return parsed.filter((id,n)=>typeof id==='string'&&switchesById.has(id)&&parsed.indexOf(id)===n);
+    }catch(err){
+      return [];
+    }
+  },
+  save(){
+    return storage.write(FAVORITES_KEY,favorites);
   }
 };
 
@@ -170,16 +206,39 @@ function haptic(style){
   }catch(err){}
 }
 
+function renderSwitch(s){
+  s.toggles.forEach(t=>{
+    if(s.off)t.classList.add('off');
+    else t.classList.remove('off');
+    t.setAttribute('aria-label',`${s.off?'Turn on':'Turn off'} ${s.item.name}`);
+  });
+}
+
+function renderFavorite(s){
+  const favorited=favorites.includes(s.id);
+  s.favButtons.forEach(b=>{
+    b.textContent=favorited?'★':'☆';
+    b.setAttribute('aria-pressed',String(favorited));
+    b.setAttribute('aria-label',favorited?`Remove ${s.item.name} from favorites`:`Add ${s.item.name} to favorites`);
+  });
+}
+
+function renderQuickAccess(){
+  quickCard.replaceChildren(...favorites.map(id=>switchesById.get(id).quickRow));
+  quickAccess.hidden=favorites.length===0;
+  switches.forEach(renderFavorite);
+}
+
 function setOn(s){
-  s.toggle.classList.remove('off');
-  s.toggle.setAttribute('aria-label',`Turn off ${s.item.name}`);
+  s.off=false;
+  renderSwitch(s);
   clearTimeout(s.resetTimer);
   s.resetTimer=null;
 }
 
 function setOff(s,expiresAt){
-  s.toggle.classList.add('off');
-  s.toggle.setAttribute('aria-label',`Turn on ${s.item.name}`);
+  s.off=true;
+  renderSwitch(s);
   clearTimeout(s.resetTimer);
   s.resetTimer=setTimeout(reconcile,Math.max(0,expiresAt-Date.now()));
 }
@@ -218,8 +277,9 @@ function pause(s,durationMs){
   noticeTimer=setTimeout(()=>notice.classList.remove('show'),4500);
 }
 
-function openChooser(s){
+function openChooser(s,returnFocus){
   chooserFor=s;
+  chooserReturnFocus=returnFocus;
   chooserTitle.textContent=`Pause ${s.item.name} for…`;
   chooser.classList.add('show');
   chooser.setAttribute('aria-hidden','false');
@@ -233,7 +293,8 @@ function closeChooser(){
   chooser.classList.remove('show');
   chooser.setAttribute('aria-hidden','true');
   phone.inert=false;
-  if(s)s.toggle.focus({preventScroll:true});
+  if(chooserReturnFocus)chooserReturnFocus.focus({preventScroll:true});
+  chooserReturnFocus=null;
   return s;
 }
 
@@ -244,7 +305,7 @@ DURATION_MINUTES.forEach(minutes=>{
   b.textContent=`${minutes} minutes`;
   b.onclick=()=>{
     const s=closeChooser();
-    if(s&&!s.toggle.classList.contains('off'))pause(s,minutes*60000);
+    if(s&&!s.off)pause(s,minutes*60000);
   };
   chooserOptions.appendChild(b);
 });
@@ -254,37 +315,79 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&chooserFor)closeCho
 
 document.documentElement.classList.add('restoring');
 
-items.forEach(i=>{
-  let r=document.createElement('div');
-  r.className='row';
-  r.innerHTML=`<div class=name><span class=icon>${i.icon}</span>${i.name}</div><button class=toggle aria-label="Turn off ${i.name}"><span class=knob></span></button>`;
-  const s={id:i.id,item:i,toggle:r.querySelector('button'),resetTimer:null};
-  switches.push(s);
-  s.toggle.onclick=e=>{
-    if(!ready)return;
-    const toggle=e.currentTarget;
+function onToggleTap(s,toggle){
+  if(!ready)return;
 
-    if(toggle.classList.contains('off')){
-      delete expirations[s.id];
-      store.save();
-      setOn(s);
-      haptic('LIGHT');
+  if(s.off){
+    delete expirations[s.id];
+    store.save();
+    setOn(s);
+    haptic('LIGHT');
 
-      if(noticeTitle.textContent===i.name){
-        clearTimeout(noticeTimer);
-        notice.classList.remove('show');
-      }
-      return;
+    if(noticeTitle.textContent===s.item.name){
+      clearTimeout(noticeTimer);
+      notice.classList.remove('show');
     }
+    return;
+  }
 
-    openChooser(s);
-  };
-  document.getElementById(i.section).appendChild(r);
+  openChooser(s,toggle);
+}
+
+function onFavoriteTap(s,button){
+  if(!ready)return;
+  const n=favorites.indexOf(s.id);
+  if(n===-1)favorites.push(s.id);
+  else favorites.splice(n,1);
+  favoriteStore.save();
+  renderQuickAccess();
+  if(n!==-1&&button===s.favButtons[1])s.favButtons[0].focus({preventScroll:true});
+}
+
+function el(tag,className,text){
+  const e=document.createElement(tag);
+  if(className)e.className=className;
+  if(text)e.textContent=text;
+  return e;
+}
+
+function buildRow(s){
+  const row=el('div','row');
+  const name=el('div','name');
+  name.appendChild(el('span','icon',s.item.icon));
+  name.appendChild(el('span','',s.item.name));
+  const controls=el('div','controls');
+  const fav=el('button','fav');
+  fav.type='button';
+  fav.onclick=()=>onFavoriteTap(s,fav);
+  const toggle=el('button','toggle');
+  toggle.type='button';
+  toggle.appendChild(el('span','knob'));
+  toggle.onclick=()=>onToggleTap(s,toggle);
+  controls.appendChild(fav);
+  controls.appendChild(toggle);
+  row.appendChild(name);
+  row.appendChild(controls);
+  s.favButtons.push(fav);
+  s.toggles.push(toggle);
+  return row;
+}
+
+items.forEach(i=>{
+  const s={id:i.id,item:i,off:false,toggles:[],favButtons:[],resetTimer:null,quickRow:null};
+  switches.push(s);
+  switchesById.set(s.id,s);
+  document.getElementById(i.section).appendChild(buildRow(s));
+  s.quickRow=buildRow(s);
+  renderSwitch(s);
+  renderFavorite(s);
 });
 
-store.load().then(saved=>{
+Promise.all([store.load(),favoriteStore.load()]).then(([saved,savedFavorites])=>{
   expirations=saved;
+  favorites=savedFavorites;
   reconcile();
+  renderQuickAccess();
   ready=true;
   requestAnimationFrame(()=>requestAnimationFrame(()=>document.documentElement.classList.remove('restoring')));
 });
