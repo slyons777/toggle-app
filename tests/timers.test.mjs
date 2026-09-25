@@ -64,7 +64,7 @@ const rowParts = row => ({
 const tick = () => new Promise(r => setImmediate(r));
 
 // Launches a fresh copy of the app against a shared "device" (clock + storage).
-async function launch(device, { native = true, source = script, haptics: hapticMode = 'ok' } = {}) {
+async function launch(device, { native = true, source = script, haptics: hapticMode = 'ok', audio: audioMode = 'ok' } = {}) {
   const timers = new Map();
   let nextId = 1;
   const listeners = {};
@@ -105,6 +105,16 @@ async function launch(device, { native = true, source = script, haptics: hapticM
       return Promise.resolve();
     },
   };
+  const audioLog = [];
+  const loaded = new Set();
+  const looping = new Set();
+  const NativeAudio = {
+    configure: async options => { audioLog.push(['configure', options]); if (audioMode === 'configure-fail') throw new Error('configure failed'); },
+    preload: async options => { audioLog.push(['preload', options.assetId, options.volume]); if (audioMode === 'fail') throw new Error('preload failed'); loaded.add(options.assetId); },
+    loop: async ({ assetId }) => { audioLog.push(['loop', assetId]); if (audioMode === 'fail') throw new Error('loop failed'); looping.add(assetId); },
+    stop: async ({ assetId }) => { audioLog.push(['stop', assetId]); looping.delete(assetId); },
+    unload: async ({ assetId }) => { audioLog.push(['unload', assetId]); loaded.delete(assetId); },
+  };
   const localStorage = {
     getItem: k => (device.storage.has(k) ? device.storage.get(k) : null),
     setItem: (k, v) => device.storage.set(k, String(v)),
@@ -112,7 +122,14 @@ async function launch(device, { native = true, source = script, haptics: hapticM
 
   const context = {
     Date: FakeDate,
-    window: native ? { Capacitor: { Plugins: { Preferences, App, Haptics } } } : {},
+    window: native ? { Capacitor: { Plugins: { Preferences, App, Haptics, NativeAudio } } } : {},
+    Audio: native ? undefined : function BrowserAudio(src) {
+      this.src = src;
+      this.loop = false;
+      this.volume = 1;
+      this.play = async () => { audioLog.push(['browser-play', src, this.volume, this.loop]); };
+      this.pause = () => { audioLog.push(['browser-pause', src]); };
+    },
     localStorage,
     document: {
       documentElement,
@@ -147,6 +164,8 @@ async function launch(device, { native = true, source = script, haptics: hapticM
   const app = {
     items: vm.runInContext('items', context),
     haptics,
+    audioLog,
+    looping: () => [...looping],
     els,
     rows,
     documentElement,
@@ -1304,4 +1323,119 @@ test('shutdown P: corrupt Shutdown storage does not break launch', async () => {
     assert.equal(storedShutdown(device).session.sound, 'brown-noise', raw);
     assert.equal(storedShutdown(device).session.transition, 'immersive', raw);
   }
+});
+
+const ambientCalls = app => app.audioLog.filter(entry => entry[0] !== 'configure');
+
+test('audio A: Brown Noise starts when Shutdown begins', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.startShutdown();
+  assert.deepEqual(app.looping(), ['brown-noise']);
+  assert.equal(app.audioLog.filter(entry => entry[0] === 'loop').length, 1);
+  assert.equal(app.audioLog.find(entry => entry[0] === 'preload')[2], 0.35);
+});
+
+test('audio B: Rain starts when selected', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.shutdownChoice('shutdownSound', 'shutdownSoundOptions', 'Rain');
+  assert.deepEqual(app.looping(), ['rain']);
+});
+
+test('audio C: Ocean starts when selected', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.shutdownChoice('shutdownSound', 'shutdownSoundOptions', 'Ocean');
+  assert.deepEqual(app.looping(), ['ocean']);
+});
+
+test('audio D: Quiet starts no audio', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.shutdownChoice('shutdownSound', 'shutdownSoundOptions', 'Quiet');
+  assert.deepEqual(app.looping(), []);
+  assert.equal(ambientCalls(app).some(entry => entry[0] === 'loop' && entry[1] === 'quiet'), false);
+});
+
+test('audio E: changing sound stops the previous track before the new one', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.shutdownChoice('shutdownSound', 'shutdownSoundOptions', 'Rain');
+  const names = app.audioLog.map(entry => entry[0] + ':' + entry[1]);
+  const stopAt = names.indexOf('stop:brown-noise');
+  const rainAt = names.indexOf('loop:rain');
+  assert.ok(stopAt >= 0 && rainAt > stopAt);
+  assert.deepEqual(app.looping(), ['rain']);
+});
+
+test('audio F: changing to Quiet stops playback', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.shutdownChoice('shutdownSound', 'shutdownSoundOptions', 'Quiet');
+  assert.deepEqual(app.looping(), []);
+  assert.ok(app.audioLog.some(entry => entry[0] === 'stop' && entry[1] === 'brown-noise'));
+});
+
+test('audio G: manual End Shutdown stops audio', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.endShutdown();
+  assert.deepEqual(app.looping(), []);
+});
+
+test('audio H: automatic expiry stops audio', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.runFor(20 * MIN);
+  assert.equal(app.shutdownActive(), false);
+  assert.deepEqual(app.looping(), []);
+});
+
+test('audio I: an expired session on launch does not leave audio playing', async () => {
+  const device = newDevice();
+  await (await launch(device)).startShutdown();
+  device.now = T0 + 20 * MIN;
+  const relaunched = await launch(device);
+  assert.equal(relaunched.shutdownActive(), false);
+  assert.deepEqual(relaunched.looping(), []);
+  assert.equal(relaunched.audioLog.some(entry => entry[0] === 'loop'), false);
+});
+
+test('audio J: restoring an active Shutdown plays the saved track', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.startShutdown();
+  await app.shutdownChoice('shutdownSound', 'shutdownSoundOptions', 'Ocean');
+  const relaunched = await launch(device);
+  assert.deepEqual(relaunched.looping(), ['ocean']);
+});
+
+test('audio K: repeated reconciliation does not stack playback', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.suspendFor(1000);
+  await app.resume();
+  await app.resume();
+  assert.deepEqual(app.looping(), ['brown-noise']);
+  assert.equal(app.audioLog.filter(entry => entry[0] === 'loop').length, 1);
+});
+
+test('audio L: a failed audio call does not corrupt the Shutdown session', async () => {
+  const device = newDevice();
+  const app = await launch(device, { audio: 'fail' });
+  await app.startShutdown();
+  assert.equal(app.shutdownActive(), true);
+  assert.equal(storedShutdown(device).session.sound, 'brown-noise');
+  assert.equal(storedShutdown(device).session.endsAt, T0 + 20 * MIN);
+  assert.deepEqual(app.looping(), []);
+});
+
+test('audio M: the browser fallback plays in the foreground and does not throw', async () => {
+  const app = await launch(newDevice(), { native: false });
+  await app.startShutdown();
+  assert.equal(app.shutdownActive(), true);
+  assert.deepEqual(app.audioLog, [['browser-play', 'audio/brown-noise.wav', 0.35, true]]);
+  await app.endShutdown();
+  assert.equal(app.audioLog.at(-1)[0], 'browser-pause');
 });

@@ -891,6 +891,7 @@ function beginShutdown(){
   shutdownStore.save();
   showShutdown();
   scheduleShutdownTick();
+  syncAmbient();
 }
 
 // Changing the duration restarts from now. The session ends at the moment of the change plus the newly chosen length.
@@ -912,6 +913,7 @@ function setShutdownSound(id){
   shutdownStore.save();
   closeShutdownSheet();
   renderShutdown();
+  syncAmbient();
 }
 
 function setShutdownTransition(id){
@@ -930,6 +932,7 @@ function endShutdown(manual){
   shutdownState.session=null;
   shutdownStore.save();
   showMain();
+  syncAmbient();
   if(manual)haptic('LIGHT');
 }
 
@@ -945,6 +948,69 @@ function reconcileShutdown(){
   }
   showShutdown();
   scheduleShutdownTick();
+  syncAmbient();
+}
+
+const AMBIENT_VOLUME=0.35;
+const AMBIENT_FILES={
+  'brown-noise':'audio/brown-noise.wav',
+  rain:'audio/rain.wav',
+  ocean:'audio/ocean.wav'
+};
+const NativeAudio=plugins.NativeAudio;
+let ambientId=null;
+let ambientQueue=Promise.resolve();
+let ambientConfigured=false;
+let browserAudio=null;
+
+function syncAmbient(){
+  const sound=shutdownState.session&&shutdownState.session.sound;
+  const wanted=sound&&AMBIENT_FILES[sound]?sound:null;
+  ambientQueue=ambientQueue.then(()=>applyAmbient(wanted)).catch(()=>{});
+  return ambientQueue;
+}
+
+async function configureAmbient(){
+  if(!NativeAudio||ambientConfigured)return;
+  await NativeAudio.configure({background:true,ignoreSilent:true,focus:true,showNotification:false});
+  ambientConfigured=true;
+}
+
+async function applyAmbient(wanted){
+  if(ambientId===wanted)return;
+  await stopAmbient();
+  if(!wanted)return;
+  try{
+    if(NativeAudio){
+      await configureAmbient();
+      await NativeAudio.preload({assetId:wanted,assetPath:AMBIENT_FILES[wanted],audioChannelNum:1,isUrl:false,volume:AMBIENT_VOLUME});
+      await NativeAudio.loop({assetId:wanted});
+      ambientId=wanted;
+      return;
+    }
+    if(typeof Audio==='undefined')return;
+    const audio=new Audio(AMBIENT_FILES[wanted]);
+    audio.loop=true;
+    audio.volume=AMBIENT_VOLUME;
+    await audio.play();
+    browserAudio=audio;
+    ambientId=wanted;
+  }catch(err){
+    ambientId=null;
+  }
+}
+
+async function stopAmbient(){
+  const current=ambientId;
+  ambientId=null;
+  if(NativeAudio&&current){
+    try{await NativeAudio.stop({assetId:current});}catch(err){}
+    try{await NativeAudio.unload({assetId:current});}catch(err){}
+  }
+  if(browserAudio){
+    try{browserAudio.pause();}catch(err){}
+    browserAudio=null;
+  }
 }
 
 function fillShutdownOptions(container,items,current,onPick){

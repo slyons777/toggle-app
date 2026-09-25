@@ -1,0 +1,7 @@
+TEMPORARY DEVELOPMENT AUDIO
+
+These WAV files are generated locally by a script in this repository.
+They are not final Shutdown sound design.
+They are not commercial or third-party recordings.
+Brown Noise, Rain, and Ocean are simple synthesized loops so playback can be tested.
+Replace them before release.
