@@ -45,6 +45,17 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 .controls{display:flex;align-items:center;gap:4px}
 .fav{width:44px;height:44px;border:0;padding:0;background:transparent;font:inherit;font-size:21px;line-height:1;color:var(--secondary);cursor:pointer;-webkit-tap-highlight-color:transparent}
 .fav[aria-pressed="true"]{color:var(--favorite)}
+.remove{height:44px;border:0;padding:0 2px;background:transparent;font:inherit;font-size:13px;font-weight:600;color:#ff453a;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.create{display:block;margin:22px 8px 4px;height:44px;border:0;padding:0 6px;background:transparent;color:var(--sheet-action);font:inherit;font-size:17px;font-weight:600;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.creator-form{max-height:min(640px,calc(100vh - 24px - env(safe-area-inset-top)));overflow:auto}
+.field{display:block;padding:8px 16px 10px;border-bottom:1px solid var(--divider)}
+.field-label{display:block;font-size:12px;font-weight:600;color:var(--secondary);margin-bottom:4px}
+.field input,.field textarea{display:block;width:100%;box-sizing:border-box;border:0;margin:0;padding:2px 0;background:transparent;color:inherit;font:inherit;font-size:17px;resize:none}
+.duration-choice{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 16px;border-bottom:1px solid var(--divider);font-size:17px}
+.creator-error{padding:8px 16px 0;color:#ff453a;font-size:13px;font-weight:600}
+.creator-error:empty{display:none}
+.creator-save{font-weight:600}
+.deleter-confirm{color:#ff453a;font-weight:600}
 .notice{position:fixed;z-index:20;top:18px;left:50%;width:min(340px,calc(100vw - 28px));box-sizing:border-box;display:grid;grid-template-columns:38px minmax(0,1fr);gap:11px;align-items:start;padding:13px 13px 14px;border:1px solid var(--banner-border);border-radius:19px;background:var(--banner-bg);box-shadow:inset 0 1px 0 var(--banner-highlight),0 12px 34px var(--banner-shadow);backdrop-filter:blur(26px) saturate(145%);-webkit-backdrop-filter:blur(26px) saturate(145%);opacity:0;pointer-events:none;transform:translate(-50%,-130%);transition:transform .36s cubic-bezier(.2,.9,.25,1.18),opacity .24s ease}
 .notice.show{opacity:1;transform:translate(-50%,0)}
 .notice-icon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:20px;line-height:1;background:#5856d6}
@@ -100,6 +111,8 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
 <div id="quickAccess" hidden><div class="section">Quick Access</div><div class="card" id="quick"></div></div>
 <div class="section">Mind Alerts</div><div class="card" id="mind"></div>
 <div class="section">Boundaries</div><div class="card" id="bounds"></div>
+<div id="mineSection" hidden><div class="section">My Switches</div><div class="card" id="mine"></div></div>
+<button id="createSwitch" class="create" type="button">+ Create a Switch</button>
 </div>
 <div id="chooser" class="chooser" aria-hidden="true">
   <div id="chooserBackdrop" class="chooser-backdrop"></div>
@@ -109,6 +122,28 @@ h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font
       <div id="chooserOptions"></div>
     </div>
     <button id="chooserCancel" class="chooser-cancel" type="button">Cancel</button>
+  </div>
+</div>
+<div id="creator" class="chooser" aria-hidden="true">
+  <div id="creatorBackdrop" class="chooser-backdrop"></div>
+  <form id="creatorForm" class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="creatorTitle">
+    <div class="chooser-group creator-form">
+      <div id="creatorTitle" class="chooser-title">New Switch</div>
+      <div id="creatorError" class="creator-error" role="alert"></div>
+      <div id="creatorFields"></div>
+      <button id="creatorSave" class="chooser-option creator-save" type="submit">Create</button>
+    </div>
+    <button id="creatorCancel" class="chooser-cancel" type="button">Cancel</button>
+  </form>
+</div>
+<div id="deleter" class="chooser" aria-hidden="true">
+  <div id="deleterBackdrop" class="chooser-backdrop"></div>
+  <div id="deleterSheet" class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="deleterTitle" tabindex="-1">
+    <div class="chooser-group">
+      <div id="deleterTitle" class="chooser-title">Delete this switch?</div>
+      <button id="deleterConfirm" class="chooser-option deleter-confirm" type="button">Delete</button>
+    </div>
+    <button id="deleterCancel" class="chooser-cancel" type="button">Cancel</button>
   </div>
 </div>
 <script>
@@ -139,18 +174,40 @@ const chooserOptions=document.getElementById('chooserOptions');
 const chooserCancel=document.getElementById('chooserCancel');
 let chooserFor=null;
 let chooserReturnFocus=null;
+let deleteFor=null;
+let deleteReturnFocus=null;
 const quickAccess=document.getElementById('quickAccess');
 const quickCard=document.getElementById('quick');
+const mineSection=document.getElementById('mineSection');
+const createSwitchButton=document.getElementById('createSwitch');
+const creator=document.getElementById('creator');
+const creatorForm=document.getElementById('creatorForm');
+const creatorFields=document.getElementById('creatorFields');
+const creatorError=document.getElementById('creatorError');
+const creatorCancel=document.getElementById('creatorCancel');
+const creatorBackdrop=document.getElementById('creatorBackdrop');
+const deleter=document.getElementById('deleter');
+const deleterSheet=document.getElementById('deleterSheet');
+const deleterTitle=document.getElementById('deleterTitle');
+const deleterConfirm=document.getElementById('deleterConfirm');
+const deleterCancel=document.getElementById('deleterCancel');
+const deleterBackdrop=document.getElementById('deleterBackdrop');
 
 const DURATION_MINUTES=[2,5,15,30];
+const MAX_NAME=40;
+const MAX_MESSAGE=140;
+const DEFAULT_ICON='✨';
 const STORE_KEY='toggle.expirations.v1';
 const FAVORITES_KEY='toggle.favorites.v1';
+const CUSTOM_KEY='toggle.custom-switches.v1';
 const plugins=(window.Capacitor&&window.Capacitor.Plugins)||{};
 const Preferences=plugins.Preferences;
 const App=plugins.App;
 const Haptics=plugins.Haptics;
 let expirations={};
 let favorites=[];
+let customs=[];
+let customSeq=0;
 let saving=Promise.resolve();
 let ready=false;
 const switches=[];
@@ -199,6 +256,59 @@ const favoriteStore={
   }
 };
 
+function oneEmoji(text){
+  const trimmed=String(text||'').trim();
+  if(!trimmed)return DEFAULT_ICON;
+  try{
+    if(typeof Intl!=='undefined'&&Intl.Segmenter){
+      const first=[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(trimmed)][0];
+      if(first)return first.segment;
+    }
+  }catch(err){}
+  return [...trimmed][0]||DEFAULT_ICON;
+}
+
+function validCustom(rec,seen){
+  if(!rec||typeof rec!=='object'||Array.isArray(rec))return null;
+  if(typeof rec.id!=='string'||!/^custom-[A-Za-z0-9-]{8,}$/.test(rec.id))return null;
+  if(seen.has(rec.id)||switchesById.has(rec.id))return null;
+  if(typeof rec.name!=='string'||typeof rec.message!=='string')return null;
+  const name=rec.name.trim();
+  const message=rec.message.trim();
+  if(!name||name.length>MAX_NAME||!message||message.length>MAX_MESSAGE)return null;
+  if(!DURATION_MINUTES.includes(rec.defaultDurationMinutes))return null;
+  seen.add(rec.id);
+  return {id:rec.id,name,message,icon:oneEmoji(rec.icon),defaultDurationMinutes:rec.defaultDurationMinutes};
+}
+
+const customStore={
+  async load(){
+    try{
+      const parsed=await storage.read(CUSTOM_KEY);
+      if(!Array.isArray(parsed))return [];
+      const seen=new Set();
+      return parsed.map(rec=>validCustom(rec,seen)).filter(Boolean);
+    }catch(err){
+      return [];
+    }
+  },
+  save(){
+    return storage.write(CUSTOM_KEY,customs);
+  }
+};
+
+function newCustomId(){
+  let unique=null;
+  try{
+    if(typeof crypto!=='undefined'&&crypto.randomUUID)unique=crypto.randomUUID();
+  }catch(err){}
+  if(!unique)unique=`${Date.now().toString(36)}-${customSeq.toString(36)}-${Math.random().toString(36).slice(2,10)}`;
+  customSeq+=1;
+  const id=`custom-${unique}`;
+  if(switchesById.has(id)||customs.some(c=>c.id===id))return newCustomId();
+  return id;
+}
+
 function haptic(style){
   if(!Haptics)return;
   try{
@@ -227,6 +337,10 @@ function renderQuickAccess(){
   quickCard.replaceChildren(...favorites.map(id=>switchesById.get(id).quickRow));
   quickAccess.hidden=favorites.length===0;
   switches.forEach(renderFavorite);
+}
+
+function renderMine(){
+  mineSection.hidden=customs.length===0;
 }
 
 function setOn(s){
@@ -277,10 +391,25 @@ function pause(s,durationMs){
   noticeTimer=setTimeout(()=>notice.classList.remove('show'),4500);
 }
 
+function layoutChooser(s){
+  const def=s.item.defaultDurationMinutes;
+  const ordered=DURATION_MINUTES.map(m=>chooserOptions.children.find(b=>b.minutes===m)).filter(Boolean);
+  if(DURATION_MINUTES.includes(def)){
+    const i=ordered.findIndex(b=>b.minutes===def);
+    if(i>0)ordered.unshift(ordered.splice(i,1)[0]);
+  }
+  ordered.forEach(b=>{
+    b.textContent=b.minutes===def?`${b.minutes} minutes · Default`:`${b.minutes} minutes`;
+    chooserOptions.appendChild(b);
+  });
+}
+
 function openChooser(s,returnFocus){
+  if(creator.classList.contains('show')||deleter.classList.contains('show'))return;
   chooserFor=s;
   chooserReturnFocus=returnFocus;
   chooserTitle.textContent=`Pause ${s.item.name} for…`;
+  layoutChooser(s);
   chooser.classList.add('show');
   chooser.setAttribute('aria-hidden','false');
   phone.inert=true;
@@ -302,6 +431,7 @@ DURATION_MINUTES.forEach(minutes=>{
   const b=document.createElement('button');
   b.type='button';
   b.className='chooser-option';
+  b.minutes=minutes;
   b.textContent=`${minutes} minutes`;
   b.onclick=()=>{
     const s=closeChooser();
@@ -311,7 +441,12 @@ DURATION_MINUTES.forEach(minutes=>{
 });
 chooserCancel.onclick=closeChooser;
 chooserBackdrop.onclick=closeChooser;
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&chooserFor)closeChooser();});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if(chooserFor)closeChooser();
+  else if(deleteFor)closeDeleter();
+  else if(creator.classList.contains('show'))closeCreator();
+});
 
 document.documentElement.classList.add('restoring');
 
@@ -364,6 +499,14 @@ function buildRow(s){
   toggle.type='button';
   toggle.appendChild(el('span','knob'));
   toggle.onclick=()=>onToggleTap(s,toggle);
+  if(s.custom){
+    const del=el('button','remove','Delete');
+    del.type='button';
+    del.setAttribute('aria-label',`Delete ${s.item.name}`);
+    del.onclick=()=>openDeleter(s,del);
+    controls.appendChild(del);
+    s.deleteButtons.push(del);
+  }
   controls.appendChild(fav);
   controls.appendChild(toggle);
   row.appendChild(name);
@@ -373,23 +516,190 @@ function buildRow(s){
   return row;
 }
 
-items.forEach(i=>{
-  const s={id:i.id,item:i,off:false,toggles:[],favButtons:[],resetTimer:null,quickRow:null};
-  switches.push(s);
-  switchesById.set(s.id,s);
-  document.getElementById(i.section).appendChild(buildRow(s));
+function attach(s){
+  const row=buildRow(s);
+  s.rows.push(row);
+  document.getElementById(s.item.section).appendChild(row);
   s.quickRow=buildRow(s);
+  s.rows.push(s.quickRow);
   renderSwitch(s);
   renderFavorite(s);
-});
+  return s;
+}
 
-Promise.all([store.load(),favoriteStore.load()]).then(([saved,savedFavorites])=>{
-  expirations=saved;
-  favorites=savedFavorites;
-  reconcile();
+function makeSwitch(item,custom){
+  const s={id:item.id,item,custom:!!custom,off:false,toggles:[],favButtons:[],deleteButtons:[],rows:[],resetTimer:null,quickRow:null};
+  switches.push(s);
+  switchesById.set(s.id,s);
+  return attach(s);
+}
+
+function labeledInput(className,label,tag,maxLength){
+  const wrap=el('label','field');
+  wrap.appendChild(el('span','field-label',label));
+  const input=el(tag,className);
+  input.maxLength=maxLength;
+  input.setAttribute('maxlength',String(maxLength));
+  input.setAttribute('aria-required','true');
+  wrap.appendChild(input);
+  creatorFields.appendChild(wrap);
+  return input;
+}
+
+const nameInput=labeledInput('custom-name','Name','input',MAX_NAME);
+const messageInput=labeledInput('custom-message','Supportive message','textarea',MAX_MESSAGE);
+messageInput.removeAttribute('aria-required');
+messageInput.setAttribute('aria-required','true');
+const iconInput=labeledInput('custom-icon','Icon','input',16);
+iconInput.removeAttribute('aria-required');
+iconInput.setAttribute('aria-label','Icon, one emoji, optional');
+const durationGroup=el('div','field');
+durationGroup.setAttribute('role','radiogroup');
+durationGroup.setAttribute('aria-label','Default pause');
+durationGroup.appendChild(el('span','field-label','Default pause'));
+const durationInputs=DURATION_MINUTES.map(minutes=>{
+  const choice=el('label','duration-choice');
+  const input=el('input','custom-duration');
+  input.type='radio';
+  input.name='defaultDuration';
+  input.minutes=minutes;
+  input.setAttribute('aria-label',`${minutes} minutes`);
+  choice.appendChild(input);
+  choice.appendChild(el('span','',`${minutes} minutes`));
+  durationGroup.appendChild(choice);
+  return input;
+});
+creatorFields.appendChild(durationGroup);
+
+function resetCreator(){
+  nameInput.value='';
+  messageInput.value='';
+  iconInput.value='';
+  creatorError.textContent='';
+  durationInputs.forEach(input=>{input.checked=input.minutes===2;});
+}
+
+function openCreator(){
+  if(!ready||chooserFor||deleteFor)return;
+  resetCreator();
+  creator.classList.add('show');
+  creator.setAttribute('aria-hidden','false');
+  phone.inert=true;
+  nameInput.focus({preventScroll:true});
+}
+
+function closeCreator(){
+  creator.classList.remove('show');
+  creator.setAttribute('aria-hidden','true');
+  phone.inert=false;
+  createSwitchButton.focus({preventScroll:true});
+}
+
+function saveCustom(e){
+  if(e)e.preventDefault();
+  if(!ready)return;
+  const name=nameInput.value.trim();
+  const message=messageInput.value.trim();
+  if(!name||name.length>MAX_NAME){
+    creatorError.textContent='Add a name.';
+    nameInput.focus({preventScroll:true});
+    return;
+  }
+  if(!message||message.length>MAX_MESSAGE){
+    creatorError.textContent='Add a supportive message.';
+    messageInput.focus({preventScroll:true});
+    return;
+  }
+  const picked=durationInputs.find(input=>input.checked);
+  const record={
+    id:newCustomId(),
+    name,
+    message,
+    icon:oneEmoji(iconInput.value),
+    defaultDurationMinutes:picked?picked.minutes:2
+  };
+  customs.push(record);
+  customStore.save();
+  makeSwitch({...record,section:'mine'},true);
+  renderMine();
+  closeCreator();
+}
+
+function openDeleter(s,returnFocus){
+  if(!ready||chooserFor||creator.classList.contains('show'))return;
+  deleteFor=s;
+  deleteReturnFocus=returnFocus;
+  deleterTitle.textContent=`Delete ${s.item.name}?`;
+  deleter.classList.add('show');
+  deleter.setAttribute('aria-hidden','false');
+  phone.inert=true;
+  deleterSheet.focus({preventScroll:true});
+}
+
+function closeDeleter(){
+  deleteFor=null;
+  deleter.classList.remove('show');
+  deleter.setAttribute('aria-hidden','true');
+  phone.inert=false;
+  if(deleteReturnFocus)deleteReturnFocus.focus({preventScroll:true});
+  deleteReturnFocus=null;
+}
+
+function confirmDelete(){
+  const s=deleteFor;
+  if(!s)return;
+  deleteFor=null;
+  deleter.classList.remove('show');
+  deleter.setAttribute('aria-hidden','true');
+  phone.inert=false;
+  deleteReturnFocus=null;
+  customs=customs.filter(c=>c.id!==s.id);
+  customStore.save();
+  const n=favorites.indexOf(s.id);
+  if(n!==-1){
+    favorites.splice(n,1);
+    favoriteStore.save();
+  }
+  if(s.id in expirations){
+    delete expirations[s.id];
+    store.save();
+  }
+  clearTimeout(s.resetTimer);
+  s.rows.forEach(row=>row.remove());
+  const index=switches.indexOf(s);
+  if(index!==-1)switches.splice(index,1);
+  switchesById.delete(s.id);
+  if(noticeTitle.textContent===s.item.name){
+    clearTimeout(noticeTimer);
+    notice.classList.remove('show');
+  }
   renderQuickAccess();
-  ready=true;
-  requestAnimationFrame(()=>requestAnimationFrame(()=>document.documentElement.classList.remove('restoring')));
+  renderMine();
+  createSwitchButton.focus({preventScroll:true});
+}
+
+createSwitchButton.onclick=openCreator;
+creatorForm.onsubmit=saveCustom;
+creatorCancel.onclick=closeCreator;
+creatorBackdrop.onclick=closeCreator;
+deleterConfirm.onclick=confirmDelete;
+deleterCancel.onclick=closeDeleter;
+deleterBackdrop.onclick=closeDeleter;
+
+items.forEach(i=>makeSwitch(i,false));
+
+Promise.all([store.load(),customStore.load()]).then(([saved,savedCustoms])=>{
+  customs=savedCustoms;
+  customs.forEach(rec=>makeSwitch({...rec,section:'mine'},true));
+  renderMine();
+  return favoriteStore.load().then(savedFavorites=>{
+    expirations=saved;
+    favorites=savedFavorites;
+    reconcile();
+    renderQuickAccess();
+    ready=true;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>document.documentElement.classList.remove('restoring')));
+  });
 });
 
 if(App)App.addListener('appStateChange',state=>{if(state.isActive&&ready)reconcile();});

@@ -26,6 +26,7 @@ class FakeElement {
   get className() { return [...this.cls].join(' '); }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return this.attrs[k]; }
+  removeAttribute(k) { delete this.attrs[k]; }
   appendChild(c) {
     if (c.parent) c.parent.children = c.parent.children.filter(x => x !== c);
     c.parent = this;
@@ -37,14 +38,20 @@ class FakeElement {
     nodes.forEach(n => this.appendChild(n));
   }
   focus() { FakeElement.focused = this; }
+  remove() {
+    if (this.parent) this.parent.children = this.parent.children.filter(c => c !== this);
+    this.parent = null;
+  }
 }
 
 // Row structure built by the app: row > [name > [icon, label], controls > [fav, toggle]].
 const rowParts = row => ({
   row,
   label: row.children[0].children[1].textContent,
-  fav: row.children[1].children[0],
-  button: row.children[1].children[1],
+  icon: row.children[0].children[0].textContent,
+  fav: row.children[1].children.find(c => c.classList.contains('fav')),
+  button: row.children[1].children.find(c => c.classList.contains('toggle')),
+  remove: row.children[1].children.find(c => c.classList.contains('remove')) || null,
 });
 
 const tick = () => new Promise(r => setImmediate(r));
@@ -60,6 +67,9 @@ async function launch(device, { native = true, source = script, haptics: hapticM
       'notice', 'noticeIcon', 'noticeTitle', 'noticeMessage', 'mind', 'bounds',
       'chooser', 'chooserBackdrop', 'chooserTitle', 'chooserOptions', 'chooserCancel',
       'quickAccess', 'quick',
+      'mineSection', 'mine', 'createSwitch',
+      'creator', 'creatorBackdrop', 'creatorTitle', 'creatorError', 'creatorFields', 'creatorForm', 'creatorCancel', 'creatorSave',
+      'deleter', 'deleterBackdrop', 'deleterSheet', 'deleterTitle', 'deleterConfirm', 'deleterCancel',
     ].map(id => [id, new FakeElement()])
   );
   const documentElement = new FakeElement();
@@ -110,6 +120,10 @@ async function launch(device, { native = true, source = script, haptics: hapticM
 
   const rows = [...els.mind.children, ...els.bounds.children].map(rowParts);
   const quickRows = () => els.quick.children.map(rowParts);
+  const mineRows = () => els.mine.children.map(rowParts);
+  const walk = node => [node, ...node.children.flatMap(walk)];
+  const field = cls => walk(els.creatorFields).find(n => n.classList.contains(cls));
+  const durationInputs = () => walk(els.creatorFields).filter(n => n.classList.contains('custom-duration'));
   const find = (list, name, where) => {
     const row = list.find(r => r.label === name);
     assert.ok(row, `no ${where} row named ${name}`);
@@ -131,9 +145,35 @@ async function launch(device, { native = true, source = script, haptics: hapticM
     quickButton,
     quickNames: () => quickRows().map(r => r.label),
     quickVisible: () => els.quickAccess.hidden === false && els.quick.children.length > 0,
-    favButton: (name, where = 'normal') =>
-      (where === 'quick' ? find(quickRows(), name, 'Quick Access') : find(rows, name, 'normal')).fav,
+    favButton: (name, where = 'normal') => {
+      const list = where === 'quick' ? quickRows() : where === 'mine' ? mineRows() : rows;
+      const place = where === 'quick' ? 'Quick Access' : where === 'mine' ? 'My Switches' : 'normal';
+      return find(list, name, place).fav;
+    },
     tapFavorite: async (name, where = 'normal') => { app.favButton(name, where).onclick(); await tick(); },
+    mineNames: () => mineRows().map(r => r.label),
+    mineVisible: () => els.mineSection.hidden === false && els.mine.children.length > 0,
+    mineButton: name => find(mineRows(), name, 'My Switches').button,
+    isMineOff: name => app.mineButton(name).classList.contains('off'),
+    pressMine: async name => { app.mineButton(name).onclick(); await tick(); },
+    mineRow: name => find(mineRows(), name, 'My Switches'),
+    openCreate: async () => { els.createSwitch.onclick(); await tick(); },
+    creatorOpen: () => els.creator.classList.contains('show'),
+    creatorError: () => els.creatorError.textContent,
+    fillCreate: ({ name = '', message = '', icon = '', minutes = 2 } = {}) => {
+      field('custom-name').value = name;
+      field('custom-message').value = message;
+      field('custom-icon').value = icon;
+      durationInputs().forEach(input => { input.checked = input.minutes === minutes; });
+    },
+    submitCreate: async () => { els.creatorForm.onsubmit({ preventDefault() {} }); await tick(); },
+    cancelCreate: async () => { els.creatorCancel.onclick(); await tick(); },
+    createCustom: async fields => { await app.openCreate(); app.fillCreate(fields); await app.submitCreate(); },
+    deleterOpen: () => els.deleter.classList.contains('show'),
+    deleterTitle: () => els.deleterTitle.textContent,
+    askDelete: async name => { app.mineRow(name).remove.onclick(); await tick(); },
+    confirmDelete: async () => { els.deleterConfirm.onclick(); await tick(); },
+    cancelDelete: async () => { els.deleterCancel.onclick(); await tick(); },
     isQuickOff: name => quickButton(name).classList.contains('off'),
     pressQuick: async name => { quickButton(name).onclick(); await tick(); },
     pendingTimers: () => timers.size,
@@ -771,5 +811,325 @@ test('favorites K: unknown or corrupt favorite data does not break launch', asyn
 
     await app.tapFavorite('Need to Know');
     assert.deepEqual(app.quickNames(), [...expected, 'Need to Know'], raw);
+  }
+});
+
+const CUSTOM_KEY = 'toggle.custom-switches.v1';
+const storedCustoms = device => JSON.parse(device.storage.get(CUSTOM_KEY) ?? 'null');
+
+test('custom A: creating a valid custom switch persists every field', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  assert.equal(app.mineVisible(), false);
+  await app.openCreate();
+  assert.equal(app.creatorOpen(), true);
+  assert.equal(app.phone.inert, true);
+  await app.submitCreate();
+  assert.equal(app.creatorOpen(), true, 'empty form does not save');
+  assert.equal(app.creatorError(), 'Add a name.');
+  assert.equal(device.storage.has(CUSTOM_KEY), false);
+
+  app.fillCreate({ name: '  Late Night  ', message: '  Rest is allowed.  ', icon: '', minutes: 15 });
+  await app.submitCreate();
+  assert.equal(app.creatorOpen(), false);
+  assert.equal(app.mineVisible(), true);
+  assert.deepEqual(app.mineNames(), ['Late Night']);
+  const [saved] = storedCustoms(device);
+  assert.equal(saved.name, 'Late Night');
+  assert.equal(saved.message, 'Rest is allowed.');
+  assert.equal(saved.icon, '✨');
+  assert.equal(saved.defaultDurationMinutes, 15);
+  assert.match(saved.id, /^custom-[A-Za-z0-9-]{8,}$/);
+  assert.equal(app.mineRow('Late Night').icon, '✨');
+  assert.equal(app.mineRow('Late Night').remove.getAttribute('aria-label'), 'Delete Late Night');
+});
+
+test('custom B: a custom switch restores after relaunch', async () => {
+  const device = newDevice();
+  await (await launch(device)).createCustom({ name: 'Late Night', message: 'Rest is allowed.', icon: '🌙', minutes: 5 });
+  const relaunched = await launch(device);
+  assert.deepEqual(relaunched.mineNames(), ['Late Night']);
+  assert.equal(relaunched.mineRow('Late Night').icon, '🌙');
+  assert.equal(storedCustoms(device)[0].message, 'Rest is allowed.');
+});
+
+test('custom C: the permanent id is not derived from the visible name', async () => {
+  const device = newDevice();
+  await (await launch(device)).createCustom({ name: 'Deep Breath', message: 'You can pause.', minutes: 2 });
+  const saved = storedCustoms(device)[0];
+  assert.equal(saved.id.startsWith('custom-'), true);
+  assert.equal(saved.id.includes('deep-breath'), false);
+  assert.notEqual(saved.id, 'deep-breath');
+});
+
+test('custom D: multiple custom switches receive unique ids', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Same', message: 'First one.', minutes: 2 });
+  await app.createCustom({ name: 'Same', message: 'Second one.', minutes: 30 });
+  const [first, second] = storedCustoms(device);
+  assert.notEqual(first.id, second.id);
+  assert.deepEqual(app.mineNames(), ['Same', 'Same']);
+  assert.equal(first.message, 'First one.');
+  assert.equal(second.message, 'Second one.');
+});
+
+test('custom E: the default duration persists', async () => {
+  const device = newDevice();
+  await (await launch(device)).createCustom({ name: 'Focus', message: 'Stay with this.', minutes: 30 });
+  assert.equal(storedCustoms(device)[0].defaultDurationMinutes, 30);
+  const relaunched = await launch(device);
+  assert.equal(storedCustoms(device)[0].defaultDurationMinutes, 30);
+  await relaunched.pressMine('Focus');
+  assert.equal(relaunched.chooserLabels()[0], '30 minutes · Default');
+});
+
+test('custom F: tapping it opens the normal duration chooser and does not pause yet', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Focus', message: 'Stay with this.', minutes: 15 });
+  await app.pressMine('Focus');
+  assert.equal(app.chooserOpen(), true);
+  assert.equal(app.chooserTitle(), 'Pause Focus for…');
+  assert.deepEqual(app.chooserLabels(), ['15 minutes · Default', '2 minutes', '5 minutes', '30 minutes']);
+  assert.equal(app.isMineOff('Focus'), false);
+  assert.equal(device.storage.has(KEY), false);
+  assert.deepEqual(app.haptics, []);
+});
+
+test('custom G: choosing a duration saves an expiration under the custom id', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Deep Breath', message: 'You can pause.', icon: '🌙', minutes: 5 });
+  const id = storedCustoms(device)[0].id;
+  await app.runFor(1000);
+  const now = device.now;
+  await app.pressMine('Deep Breath');
+  await app.choose('30 minutes');
+  assert.equal(app.isMineOff('Deep Breath'), true);
+  assert.deepEqual(stored(device), { [id]: now + 30 * MIN });
+  assert.equal(Object.hasOwn(stored(device), 'deep-breath'), false);
+  assert.deepEqual(app.haptics, ['MEDIUM']);
+  assert.equal(app.els.noticeTitle.textContent, 'Deep Breath');
+  assert.equal(app.els.noticeMessage.textContent, 'You can pause.');
+  assert.equal(app.els.noticeIcon.textContent, '🌙');
+});
+
+test('custom H: its timer survives relaunch', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Focus', message: 'Stay with this.', minutes: 2 });
+  const id = storedCustoms(device)[0].id;
+  await app.pressMine('Focus');
+  await app.choose('5 minutes');
+  device.now = T0 + MIN;
+  const relaunched = await launch(device);
+  assert.equal(relaunched.isMineOff('Focus'), true);
+  assert.deepEqual(stored(device), { [id]: T0 + 5 * MIN });
+});
+
+test('custom I: manual restore clears its expiration', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Focus', message: 'Stay with this.', minutes: 15 });
+  await app.pressMine('Focus');
+  await app.choose('15 minutes · Default');
+  app.haptics.length = 0;
+  await app.pressMine('Focus');
+  assert.equal(app.chooserOpen(), false);
+  assert.equal(app.isMineOff('Focus'), false);
+  assert.deepEqual(stored(device), {});
+  assert.deepEqual(app.haptics, ['LIGHT']);
+});
+
+test('custom J: automatic expiry turns it back on', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Focus', message: 'Stay with this.', minutes: 2 });
+  await app.pressMine('Focus');
+  await app.choose('2 minutes · Default');
+  app.haptics.length = 0;
+  await app.runFor(2 * MIN - 1);
+  assert.equal(app.isMineOff('Focus'), true);
+  await app.runFor(1);
+  assert.equal(app.isMineOff('Focus'), false);
+  assert.deepEqual(stored(device), {});
+  assert.deepEqual(app.haptics, []);
+});
+
+test('custom K: a custom switch can be favorited', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Late Night', message: 'Rest is allowed.', minutes: 2 });
+  const id = storedCustoms(device)[0].id;
+  await app.tapFavorite('Late Night', 'mine');
+  assert.deepEqual(storedFavs(device), [id]);
+  assert.deepEqual(app.quickNames(), ['Late Night']);
+  assert.equal(app.favButton('Late Night', 'quick').getAttribute('aria-pressed'), 'true');
+  assert.equal(app.isMineOff('Late Night'), false);
+  assert.deepEqual(app.haptics, []);
+});
+
+test('custom L: a custom favorite restores after relaunch', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.tapFavorite('Access');
+  await app.createCustom({ name: 'Late Night', message: 'Rest is allowed.', minutes: 2 });
+  await app.tapFavorite('Late Night', 'mine');
+  const id = storedCustoms(device)[0].id;
+  const relaunched = await launch(device);
+  assert.deepEqual(storedFavs(device), ['access', id]);
+  assert.deepEqual(relaunched.quickNames(), ['Access', 'Late Night']);
+});
+
+test('custom M: Quick Access and My Switches reflect the same state', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Focus', message: 'Stay with this.', minutes: 5 });
+  await app.tapFavorite('Focus', 'mine');
+  const id = storedCustoms(device)[0].id;
+  await app.pressQuick('Focus');
+  await app.choose('5 minutes · Default');
+  assert.equal(app.isQuickOff('Focus'), true);
+  assert.equal(app.isMineOff('Focus'), true);
+  assert.deepEqual(Object.keys(stored(device)), [id]);
+  app.haptics.length = 0;
+  await app.pressMine('Focus');
+  assert.equal(app.isMineOff('Focus'), false);
+  assert.equal(app.isQuickOff('Focus'), false);
+  assert.deepEqual(stored(device), {});
+  assert.deepEqual(app.haptics, ['LIGHT']);
+});
+
+test('custom N: unfavoriting does not affect its timer', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Focus', message: 'Stay with this.', minutes: 15 });
+  await app.tapFavorite('Focus', 'mine');
+  await app.pressQuick('Focus');
+  await app.choose('15 minutes · Default');
+  const id = storedCustoms(device)[0].id;
+  const expiry = stored(device)[id];
+  await app.tapFavorite('Focus', 'quick');
+  assert.deepEqual(app.quickNames(), []);
+  assert.equal(app.isMineOff('Focus'), true);
+  assert.equal(stored(device)[id], expiry);
+  await app.runFor(15 * MIN - 1);
+  assert.equal(app.isMineOff('Focus'), true);
+  await app.runFor(1);
+  assert.equal(app.isMineOff('Focus'), false);
+});
+
+test('custom O: deleting removes the custom record', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Late Night', message: 'Rest is allowed.', minutes: 2 });
+  await app.askDelete('Late Night');
+  assert.equal(app.deleterOpen(), true);
+  assert.equal(app.deleterTitle(), 'Delete Late Night?');
+  assert.equal(app.phone.inert, true);
+  await app.confirmDelete();
+  assert.equal(app.deleterOpen(), false);
+  assert.deepEqual(storedCustoms(device), []);
+  assert.equal(app.mineVisible(), false);
+});
+
+test('custom P: deleting removes it from favorites', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.tapFavorite('Access');
+  await app.createCustom({ name: 'Late Night', message: 'Rest is allowed.', minutes: 2 });
+  await app.tapFavorite('Late Night', 'mine');
+  await app.askDelete('Late Night');
+  await app.confirmDelete();
+  assert.deepEqual(storedFavs(device), ['access']);
+  assert.deepEqual(app.quickNames(), ['Access']);
+});
+
+test('custom Q: deleting clears its active timer', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Focus', message: 'Stay with this.', minutes: 30 });
+  const id = storedCustoms(device)[0].id;
+  await app.pressMine('Focus');
+  await app.choose('30 minutes · Default');
+  assert.equal(typeof stored(device)[id], 'number');
+  await app.askDelete('Focus');
+  await app.confirmDelete();
+  assert.deepEqual(stored(device), {});
+  await app.runFor(30 * MIN);
+  assert.deepEqual(stored(device), {});
+});
+
+test('custom R: deleting one custom switch does not affect another', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'First', message: 'Keep going.', minutes: 5 });
+  await app.createCustom({ name: 'Second', message: 'Still here.', minutes: 15 });
+  await app.tapFavorite('Second', 'mine');
+  await app.pressMine('Second');
+  await app.choose('15 minutes · Default');
+  const kept = storedCustoms(device)[1];
+  const expiry = stored(device)[kept.id];
+  await app.askDelete('First');
+  await app.confirmDelete();
+  assert.deepEqual(storedCustoms(device), [kept]);
+  assert.deepEqual(app.mineNames(), ['Second']);
+  assert.equal(app.isMineOff('Second'), true);
+  assert.equal(stored(device)[kept.id], expiry);
+  assert.deepEqual(storedFavs(device), [kept.id]);
+  assert.deepEqual(app.quickNames(), ['Second']);
+});
+
+test('custom S: canceling deletion changes nothing', async () => {
+  const device = newDevice();
+  const app = await launch(device);
+  await app.createCustom({ name: 'Late Night', message: 'Rest is allowed.', minutes: 2 });
+  await app.tapFavorite('Late Night', 'mine');
+  await app.pressMine('Late Night');
+  await app.choose('2 minutes · Default');
+  const before = [device.storage.get(CUSTOM_KEY), device.storage.get(FAV_KEY), device.storage.get(KEY)];
+  await app.askDelete('Late Night');
+  await app.cancelDelete();
+  assert.equal(app.deleterOpen(), false);
+  assert.equal(app.isMineOff('Late Night'), true);
+  assert.deepEqual(app.mineNames(), ['Late Night']);
+  assert.deepEqual(app.quickNames(), ['Late Night']);
+  assert.deepEqual(
+    [device.storage.get(CUSTOM_KEY), device.storage.get(FAV_KEY), device.storage.get(KEY)],
+    before
+  );
+});
+
+test('custom T: corrupt custom-switch storage does not break launch', async () => {
+  const good = { id: 'custom-abc12345', name: 'Kept', message: 'Still here.', icon: '🌙', defaultDurationMinutes: 5 };
+  const cases = [
+    ['not json', []],
+    [JSON.stringify({ name: 'Kept' }), []],
+    [JSON.stringify([
+      null,
+      { id: 'overthinking', name: 'Nope', message: 'No.', icon: '🌙', defaultDurationMinutes: 2 },
+      { id: 'custom-x', name: 'Too Short', message: 'No.', icon: '🌙', defaultDurationMinutes: 2 },
+      { id: 'custom-missingmsg', name: 'No Message', icon: '🌙', defaultDurationMinutes: 2 },
+      good,
+      { ...good, id: 'custom-abc12345' },
+    ]), ['Kept']],
+  ];
+  for (const [raw, expected] of cases) {
+    const device = newDevice(new Map([
+      [CUSTOM_KEY, raw],
+      [KEY, JSON.stringify({ spiraling: T0 + MIN })],
+      [FAV_KEY, JSON.stringify(['custom-abc12345', 'access'])],
+    ]));
+    const app = await launch(device);
+    assert.deepEqual(app.mineNames(), expected, raw);
+    assert.deepEqual(app.offNames(), ['Spiraling'], raw);
+    assert.equal(app.rows.length, 12, raw);
+    if (expected.length) {
+      assert.deepEqual(app.quickNames(), ['Kept', 'Access'], raw);
+      await app.pressMine('Kept');
+      assert.equal(app.chooserLabels()[0], '5 minutes · Default', raw);
+      await app.cancel();
+    }
   }
 });
