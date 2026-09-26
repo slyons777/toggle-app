@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { AUDIO_SEED, makeSweepTexture } from '../scripts/generate-shutdown-audio.mjs';
 
 const html = readFileSync(new URL('../www/index.html', import.meta.url), 'utf8');
 const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].pop()[1];
@@ -64,7 +65,7 @@ const rowParts = row => ({
 const tick = () => new Promise(r => setImmediate(r));
 
 // Launches a fresh copy of the app against a shared "device" (clock + storage).
-async function launch(device, { native = true, source = script, haptics: hapticMode = 'ok', audio: audioMode = 'ok', reducedMotion = false } = {}) {
+async function launch(device, { native = true, source = script, haptics: hapticMode = 'ok', audio: audioMode = 'ok', reducedMotion = false, webAudio = null } = {}) {
   const timers = new Map();
   let nextId = 1;
   const listeners = {};
@@ -115,7 +116,7 @@ async function launch(device, { native = true, source = script, haptics: hapticM
     loop: async ({ assetId }) => { audioLog.push(['loop', assetId]); if (audioMode === 'fail') throw new Error('loop failed'); looping.add(assetId); },
     play: async ({ assetId, volume }) => { audioLog.push(['play', assetId, volume]); if (audioMode === 'fail') throw new Error('play failed'); },
     setVolume: async ({ assetId, volume, duration }) => { audioLog.push(['setVolume', assetId, volume, duration || 0]); },
-    stop: async ({ assetId }) => { audioLog.push(['stop', assetId]); looping.delete(assetId); },
+    stop: async ({ assetId, fadeOut, fadeOutDuration }) => { audioLog.push(['stop', assetId, fadeOut ? fadeOutDuration : 0]); looping.delete(assetId); },
     unload: async ({ assetId }) => { audioLog.push(['unload', assetId]); loaded.delete(assetId); },
   };
   const localStorage = {
@@ -123,16 +124,41 @@ async function launch(device, { native = true, source = script, haptics: hapticM
     setItem: (k, v) => device.storage.set(k, String(v)),
   };
 
+  const browser = { last: null };
+  function FakeAudioContext() {
+    this.state = 'suspended';
+    this.sampleRate = 8000;
+    this.currentTime = 0;
+    this.destination = {};
+    this.resume = async () => {
+      if (webAudio === 'resume-fail') throw new Error('resume failed');
+      this.state = 'running';
+    };
+    this.close = async () => { this.state = 'closed'; };
+    this.createBuffer = (channels, length) => ({ getChannelData: () => new Float32Array(length) });
+    this.createBufferSource = () => ({
+      connect() {},
+      start() { if (webAudio === 'start-fail') throw new Error('start failed'); },
+      stop() {},
+    });
+    const param = () => ({ setValueAtTime() {}, linearRampToValueAtTime() {} });
+    this.createBiquadFilter = () => ({ frequency: param(), connect() {} });
+    this.createDelay = () => ({ delayTime: param(), connect() {} });
+    this.createStereoPanner = () => ({ pan: param(), connect() {} });
+    this.createGain = () => ({ gain: param(), connect() {} });
+  }
   const context = {
     Date: FakeDate,
     window: {
       ...(native ? { Capacitor: { Plugins: { Preferences, App, Haptics, NativeAudio } } } : {}),
       matchMedia: query => ({ matches: reducedMotion && String(query).includes('prefers-reduced-motion') }),
+      ...(webAudio ? { AudioContext: FakeAudioContext } : {}),
     },
     Audio: native ? undefined : function BrowserAudio(src) {
       this.src = src;
       this.loop = false;
       this.volume = 1;
+      browser.last = this;
       this.play = async () => { audioLog.push(['browser-play', src, this.volume, this.loop]); };
       this.pause = () => { audioLog.push(['browser-pause', src]); };
     },
@@ -171,6 +197,7 @@ async function launch(device, { native = true, source = script, haptics: hapticM
     items: vm.runInContext('items', context),
     haptics,
     audioLog,
+    browserAudio: () => browser.last,
     looping: () => [...looping],
     els,
     rows,
@@ -1557,6 +1584,113 @@ test('transition M: manual exit stops transition and ambient audio', async () =>
   assert.ok(app.audioLog.some(entry => entry[0] === 'stop' && entry[1] === 'brown-noise'));
   assert.ok(app.audioLog.some(entry => entry[0] === 'stop' && entry[1] === 'threshold-enter'));
   assert.equal(plays(app, 'threshold-exit').length, 1);
+});
+
+test('harden: Web Audio resume or start failure falls back without a second sweep', async () => {
+  for (const webAudio of ['resume-fail', 'start-fail']) {
+    const app = await launch(newDevice(), { webAudio });
+    await app.startShutdown();
+    assert.equal(plays(app, 'sweep-texture').length, 1, webAudio);
+    assert.equal(plays(app, 'threshold-enter').length, 1, webAudio);
+  }
+  const live = await launch(newDevice(), { webAudio: 'ok' });
+  await live.startShutdown();
+  assert.equal(plays(live, 'sweep-texture').length, 0);
+  assert.equal(plays(live, 'threshold-enter').length, 1);
+});
+
+test('harden: Minimal fades the bed to 0.35 and skips the sweep', async () => {
+  const device = newDevice(new Map([[SHUTDOWN_KEY, JSON.stringify({ defaults: { durationMinutes: 20, sound: 'rain', transition: 'minimal' }, session: null })]]));
+  const app = await launch(device);
+  await app.startShutdown();
+  const ramp = app.audioLog.find(entry => entry[0] === 'setVolume' && entry[1] === 'rain' && entry[2] === 0.35);
+  assert.equal(ramp[3], 1.8);
+  assert.equal(plays(app, 'sweep-texture').length, 0);
+  assert.equal(plays(app, 'threshold-enter').length, 0);
+});
+
+test('harden: the browser ramp reaches 0.35 and cancels on End Shutdown', async () => {
+  const rising = await launch(newDevice(), { native: false });
+  await rising.startShutdown();
+  assert.equal(rising.browserAudio().volume, 0.12);
+  await rising.runFor(8000);
+  assert.equal(Math.round(rising.browserAudio().volume * 100) / 100, 0.35);
+  const cancelled = await launch(newDevice(), { native: false });
+  await cancelled.startShutdown();
+  await cancelled.endShutdown();
+  await cancelled.runFor(8000);
+  assert.equal(cancelled.browserAudio().volume, 0.12);
+  assert.equal(cancelled.audioLog.at(-1)[0], 'browser-pause');
+});
+
+test('harden: native exit unloads only after the fade, and not into a newer session', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  await app.endShutdown();
+  const faded = app.audioLog.find(entry => entry[0] === 'stop' && entry[1] === 'brown-noise');
+  assert.equal(faded[2], 0.8);
+  assert.equal(app.audioLog.some(entry => entry[0] === 'unload' && entry[1] === 'brown-noise'), false);
+  await app.runFor(200);
+  await app.startShutdown();
+  await app.runFor(2000);
+  assert.deepEqual(app.looping(), ['brown-noise']);
+  const secondLoop = app.audioLog.map((entry, index) => ({ entry, index })).filter(item => item.entry[0] === 'loop' && item.entry[1] === 'brown-noise').at(-1).index;
+  assert.equal(app.audioLog.some((entry, index) => index > secondLoop && entry[0] === 'unload' && entry[1] === 'brown-noise'), false);
+  const settled = await launch(newDevice());
+  await settled.startShutdown();
+  await settled.endShutdown();
+  await settled.runFor(800);
+  assert.equal(settled.audioLog.some(entry => entry[0] === 'unload' && entry[1] === 'brown-noise'), true);
+});
+
+test('harden: Immersive and Gentle phase changes match their timelines', async () => {
+  const immersive = await launch(newDevice());
+  await immersive.startShutdown();
+  await immersive.runFor(2499);
+  assert.equal(immersive.els.shutdownView.getAttribute('data-phase'), 'threshold');
+  await immersive.runFor(1);
+  assert.equal(immersive.els.shutdownView.getAttribute('data-phase'), 'sweep');
+  await immersive.runFor(8499);
+  assert.equal(immersive.els.shutdownView.getAttribute('data-phase'), 'sweep');
+  await immersive.runFor(1);
+  assert.equal(immersive.els.shutdownView.getAttribute('data-phase'), 'still');
+  const device = newDevice(new Map([[SHUTDOWN_KEY, JSON.stringify({ defaults: { durationMinutes: 20, sound: 'brown-noise', transition: 'gentle' }, session: null })]]));
+  const gentle = await launch(device);
+  await gentle.startShutdown();
+  await gentle.runFor(1999);
+  assert.equal(gentle.els.shutdownView.getAttribute('data-phase'), 'threshold');
+  await gentle.runFor(1);
+  assert.equal(gentle.els.shutdownView.getAttribute('data-phase'), 'sweep');
+  await gentle.runFor(4999);
+  assert.equal(gentle.els.shutdownView.getAttribute('data-phase'), 'sweep');
+  await gentle.runFor(1);
+  assert.equal(gentle.els.shutdownView.getAttribute('data-phase'), 'still');
+});
+
+test('harden: the fallback sweep is a reproducible stereo movement', () => {
+  assert.equal(AUDIO_SEED, 20260926);
+  const once = makeSweepTexture();
+  const twice = makeSweepTexture();
+  assert.equal(once.length, twice.length);
+  assert.equal(once[1000], twice[1000]);
+  let maxDiff = 0;
+  for (let i = 0; i < once.length; i += 2) maxDiff = Math.max(maxDiff, Math.abs(once[i] - once[i + 1]));
+  assert.ok(maxDiff > 0.05);
+});
+
+test('harden: backgrounding mid-entry restores Stillness without replaying entry', async () => {
+  const app = await launch(newDevice());
+  await app.startShutdown();
+  assert.equal(app.els.shutdownView.getAttribute('data-phase'), 'threshold');
+  const haptics = app.haptics.length;
+  const washes = plays(app, 'threshold-enter').length;
+  await app.suspendFor(1000);
+  await app.resume();
+  assert.equal(app.shutdownActive(), true);
+  assert.equal(app.els.shutdownView.getAttribute('data-phase'), 'still');
+  assert.equal(app.haptics.length, haptics);
+  assert.equal(plays(app, 'threshold-enter').length, washes);
+  assert.equal(plays(app, 'sweep-texture').length, 1);
 });
 
 test('transition N: a failed transition does not corrupt the Shutdown session', async () => {

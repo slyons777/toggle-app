@@ -5,4 +5,5 @@ They are not final Shutdown sound design.
 They are not commercial or third-party recordings.
 Brown Noise, Rain, and Ocean are simple synthesized loops so playback can be tested.
 threshold-enter.wav, threshold-exit.wav, and sweep-texture.wav are temporary Threshold and Sweep placeholders from scripts/generate-shutdown-audio.mjs.
+They are reproducible from AUDIO_SEED 20260926. sweep-texture.wav is an 11-second stereo fallback: left, center, right, then darker and back to center as it dissolves.
 Replace them before release.

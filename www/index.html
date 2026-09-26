@@ -781,6 +781,19 @@ const SHUTDOWN_TRANSITIONS=[
   {id:'minimal',name:'Minimal'}
 ];
 const SHUTDOWN_FACTORY={durationMinutes:20,sound:'brown-noise',transition:'immersive'};
+const AMBIENT_VOLUME=0.35;
+const AMBIENT_FLOOR=0.12;
+const EXIT_FADE_MS=800;
+const EPHEMERAL_IN_MS=400;
+const EPHEMERAL_HOLD_MS=3200;
+const EPHEMERAL_OUT_MS=1400;
+// One timeline per preset. Sweep audio starts with the threshold wash and is
+// scheduled to end at stillness, so nothing is cut short of its own duration.
+const SHUTDOWN_TIMELINE={
+  immersive:{thresholdMs:2500,sweepStartMs:0,sweepMs:11000,stillMs:11000,ambientFadeMs:8000,ephemeralMs:11400,thresholdVolume:0.22,sweepVolume:0.2,exitVolume:0.14,haptics:[[0,'MEDIUM'],[480,'HEAVY'],[1100,'LIGHT']]},
+  gentle:{thresholdMs:2000,sweepStartMs:0,sweepMs:7000,stillMs:7000,ambientFadeMs:5000,ephemeralMs:7400,thresholdVolume:0.1,sweepVolume:0.1,exitVolume:0.08,haptics:[[0,'MEDIUM'],[700,'LIGHT']]},
+  minimal:{thresholdMs:0,sweepStartMs:0,sweepMs:0,stillMs:1800,ambientFadeMs:1800,ephemeralMs:2200,thresholdVolume:0,sweepVolume:0,exitVolume:0,haptics:[[0,'LIGHT']]}
+};
 const shutdownView=document.getElementById('shutdownView');
 const shutdownRemaining=document.getElementById('shutdownRemaining');
 const shutdownSoundName=document.getElementById('shutdownSoundName');
@@ -944,6 +957,8 @@ function applyEnterVisual(transition){
   else if(motion==='gentle')phone.classList.add('is-receding-soft');
 }
 
+// Backgrounding or relaunching during entry aborts the cinematic transition.
+// Returning restores the active session directly in Stillness and does not replay it.
 function applyRestoredVisual(transition){
   clearTransitionTimers();
   hideEphemeral();
@@ -951,6 +966,10 @@ function applyRestoredVisual(transition){
   shutdownView.setAttribute('data-motion',visualMotion(transition));
   setShutdownPhase('still');
   phone.classList.remove('is-receding','is-receding-soft');
+}
+
+function shutdownTimeline(style){
+  return SHUTDOWN_TIMELINE[style]||SHUTDOWN_TIMELINE.immersive;
 }
 
 function armShutdownHaptics(steps){
@@ -962,7 +981,7 @@ function armShutdownHaptics(steps){
   });
 }
 
-function scheduleEphemeral(){
+function scheduleEphemeral(atMs){
   const line=document.getElementById('shutdownEphemeral');
   transitionTimers.push(setTimeout(()=>{
     if(!shutdownState.session)return;
@@ -970,28 +989,45 @@ function scheduleEphemeral(){
     line.classList.add('show');
     transitionTimers.push(setTimeout(()=>{
       line.classList.remove('show');
-      transitionTimers.push(setTimeout(()=>{line.hidden=true;},1400));
-    },3200));
-  },400));
+      transitionTimers.push(setTimeout(()=>{line.hidden=true;},EPHEMERAL_OUT_MS));
+    },EPHEMERAL_HOLD_MS));
+  },atMs));
 }
 
-function scheduleStill(ms){
+function scheduleTransition(plan){
+  if(plan.thresholdMs>0){
+    transitionTimers.push(setTimeout(()=>{
+      if(shutdownState.session)setShutdownPhase('sweep');
+    },plan.thresholdMs));
+  }
   transitionTimers.push(setTimeout(()=>{
     if(!shutdownState.session)return;
     setShutdownPhase('still');
     stopNativeClips();
-    scheduleEphemeral();
-  },ms));
+  },plan.stillMs));
+  scheduleEphemeral(plan.ephemeralMs);
 }
 
-function startWebSweep(style){
+function wait(ms){
+  return new Promise(resolve=>setTimeout(resolve,ms));
+}
+
+async function startWebSweep(plan){
   const AC=window.AudioContext||window.webkitAudioContext;
-  if(!AC||style==='minimal')return false;
+  if(!AC||plan.sweepMs<=0)return false;
+  let created=false;
+  let source=null;
+  let started=false;
   try{
-    if(!sweepCtx)sweepCtx=new AC();
+    if(!sweepCtx){
+      sweepCtx=new AC();
+      created=true;
+    }
     const ctx=sweepCtx;
-    const gentle=style==='gentle';
-    const seconds=gentle?8:12;
+    if(ctx.state==='suspended')await ctx.resume();
+    if(ctx.state!=='running')throw new Error('audio context unusable');
+    const gentle=plan.sweepVolume<=0.1;
+    const seconds=plan.sweepMs/1000;
     const width=gentle?0.42:1;
     const frames=ctx.sampleRate;
     const buffer=ctx.createBuffer(2,frames,ctx.sampleRate);
@@ -1004,7 +1040,7 @@ function startWebSweep(style){
       left[i]=n*0.35;
       right[i]=left[Math.max(0,i-180)]*0.65+n*0.2;
     }
-    const source=ctx.createBufferSource();
+    source=ctx.createBufferSource();
     source.buffer=buffer;
     source.loop=true;
     const filter=ctx.createBiquadFilter();
@@ -1012,7 +1048,7 @@ function startWebSweep(style){
     const delay=ctx.createDelay(0.05);
     const panner=ctx.createStereoPanner();
     const gain=ctx.createGain();
-    const t=ctx.currentTime;
+    const t=ctx.currentTime+(plan.sweepStartMs/1000);
     filter.frequency.setValueAtTime(gentle?1200:2200,t);
     filter.frequency.linearRampToValueAtTime(gentle?480:360,t+seconds);
     delay.delayTime.setValueAtTime(0.004,t);
@@ -1033,12 +1069,18 @@ function startWebSweep(style){
     delay.connect(panner);
     panner.connect(gain);
     gain.connect(ctx.destination);
-    const go=()=>{source.start(t);source.stop(t+seconds);};
-    if(ctx.state==='suspended')ctx.resume().then(go).catch(()=>{});
-    else go();
+    source.start(t);
+    started=true;
+    source.stop(t+seconds);
     sweepStop=()=>{try{source.stop();}catch(err){}};
     return true;
   }catch(err){
+    sweepStop=null;
+    if(started){try{source.stop();}catch(e){}}
+    if(created&&sweepCtx){
+      try{if(sweepCtx.close)await sweepCtx.close();}catch(e){}
+      sweepCtx=null;
+    }
     return false;
   }
 }
@@ -1065,24 +1107,20 @@ async function stopNativeClips(){
 }
 
 async function beginTransition(style){
+  const plan=shutdownTimeline(style);
   clearTransitionTimers();
   hideEphemeral();
-  if(style==='minimal'){
-    setShutdownPhase('fade');
-    armShutdownHaptics([[0,'LIGHT']]);
-    scheduleStill(1800);
-    return;
+  setShutdownPhase(style==='minimal'?'fade':'threshold');
+  armShutdownHaptics(plan.haptics);
+  if(style!=='minimal'){
+    let web=false;
+    try{web=await startWebSweep(plan);}catch(err){web=false;}
+    try{
+      await playNativeClip('threshold-enter',plan.thresholdVolume);
+      if(!web)await playNativeClip('sweep-texture',plan.sweepVolume);
+    }catch(err){}
   }
-  const gentle=style==='gentle';
-  setShutdownPhase('threshold');
-  armShutdownHaptics(gentle?[[0,'MEDIUM'],[700,'LIGHT']]:[[0,'MEDIUM'],[480,'HEAVY'],[1100,'LIGHT']]);
-  const web=startWebSweep(style);
-  try{
-    await playNativeClip('threshold-enter',gentle?0.1:0.22);
-    if(!web)await playNativeClip('sweep-texture',gentle?0.1:0.2);
-  }catch(err){}
-  transitionTimers.push(setTimeout(()=>{if(shutdownState.session)setShutdownPhase('sweep');},gentle?2000:2500));
-  scheduleStill(gentle?7000:11000);
+  scheduleTransition(plan);
 }
 
 async function loadShutdownHaptics(){
@@ -1107,7 +1145,8 @@ function beginShutdown(){
   showShutdown();
   applyEnterVisual(defaults.transition);
   scheduleShutdownTick();
-  syncAmbient({fadeIn:defaults.transition!=='minimal'}).then(()=>beginTransition(defaults.transition)).catch(()=>{});
+  const plan=shutdownTimeline(defaults.transition);
+  syncAmbient({fadeIn:true,fadeMs:plan.ambientFadeMs}).then(()=>beginTransition(defaults.transition)).catch(()=>{});
 }
 
 // Changing the duration restarts from now. The session ends at the moment of the change plus the newly chosen length.
@@ -1152,9 +1191,10 @@ function endShutdown(manual){
   shutdownState.session=null;
   shutdownStore.save();
   showMain();
+  const exitVolume=style&&shutdownTimeline(style).exitVolume;
   stopNativeClips().then(()=>{
-    if(manual&&style&&style!=='minimal')return playNativeClip('threshold-exit',style==='gentle'?0.08:0.14);
-  }).then(()=>stopAmbient(manual)).catch(()=>{});
+    if(manual&&exitVolume)return playNativeClip('threshold-exit',exitVolume);
+  }).then(()=>stopAmbient(!!manual)).catch(()=>{});
   if(manual&&shutdownHapticsOn)haptic('LIGHT');
 }
 
@@ -1174,7 +1214,6 @@ function reconcileShutdown(){
   syncAmbient();
 }
 
-const AMBIENT_VOLUME=0.35;
 const AMBIENT_FILES={
   'brown-noise':'audio/brown-noise.wav',
   rain:'audio/rain.wav',
@@ -1187,9 +1226,13 @@ let ambientConfigured=false;
 let browserAudio=null;
 
 let ambientFadeIn=false;
+let ambientFadeMs=0;
+let ambientEpoch=0;
+let browserRampTimer=null;
 
 function syncAmbient(opts){
   ambientFadeIn=!!(opts&&opts.fadeIn);
+  ambientFadeMs=opts&&opts.fadeMs?opts.fadeMs:0;
   const sound=shutdownState.session&&shutdownState.session.sound;
   const wanted=sound&&AMBIENT_FILES[sound]?sound:null;
   ambientQueue=ambientQueue.then(()=>applyAmbient(wanted)).catch(()=>{});
@@ -1202,21 +1245,48 @@ async function configureAmbient(){
   ambientConfigured=true;
 }
 
+function cancelBrowserRamp(){
+  if(browserRampTimer)clearTimeout(browserRampTimer);
+  browserRampTimer=null;
+}
+
+function rampBrowserVolume(audio,from,to,ms){
+  cancelBrowserRamp();
+  audio.volume=from;
+  const steps=8;
+  const stepMs=Math.max(1,Math.round(ms/steps));
+  let i=0;
+  const tick=()=>{
+    if(browserAudio!==audio)return;
+    i+=1;
+    const t=Math.min(1,i/steps);
+    audio.volume=from+(to-from)*t;
+    if(t<1)browserRampTimer=setTimeout(tick,stepMs);
+    else browserRampTimer=null;
+  };
+  browserRampTimer=setTimeout(tick,stepMs);
+}
+
 async function applyAmbient(wanted){
   const fade=ambientFadeIn;
+  const fadeMs=ambientFadeMs;
   ambientFadeIn=false;
+  ambientFadeMs=0;
   if(ambientId===wanted)return;
+  const epoch=++ambientEpoch;
   await stopAmbient(false);
+  if(epoch!==ambientEpoch)return;
   if(!wanted)return;
   try{
     if(NativeAudio){
       await configureAmbient();
       await NativeAudio.preload({assetId:wanted,assetPath:AMBIENT_FILES[wanted],audioChannelNum:1,isUrl:false,volume:AMBIENT_VOLUME});
       await NativeAudio.loop({assetId:wanted});
+      if(epoch!==ambientEpoch)return;
       ambientId=wanted;
       if(fade){
-        try{await NativeAudio.setVolume({assetId:wanted,volume:0.12,duration:0});}catch(err){}
-        try{await NativeAudio.setVolume({assetId:wanted,volume:AMBIENT_VOLUME,duration:8});}catch(err){}
+        try{await NativeAudio.setVolume({assetId:wanted,volume:AMBIENT_FLOOR,duration:0});}catch(err){}
+        try{await NativeAudio.setVolume({assetId:wanted,volume:AMBIENT_VOLUME,duration:fadeMs/1000});}catch(err){}
       }
       return;
     }
@@ -1225,25 +1295,34 @@ async function applyAmbient(wanted){
     audio.loop=true;
     audio.volume=AMBIENT_VOLUME;
     await audio.play();
-    if(fade)audio.volume=0.12;
+    if(epoch!==ambientEpoch)return;
     browserAudio=audio;
     ambientId=wanted;
+    if(fade)rampBrowserVolume(audio,AMBIENT_FLOOR,AMBIENT_VOLUME,fadeMs);
   }catch(err){
-    ambientId=null;
+    if(epoch===ambientEpoch)ambientId=null;
   }
 }
 
 async function stopAmbient(soft){
+  cancelBrowserRamp();
   const current=ambientId;
+  const epoch=ambientEpoch;
   ambientId=null;
-  if(NativeAudio&&current){
-    try{await NativeAudio.stop({assetId:current,fadeOut:!!soft,fadeOutDuration:0.8});}catch(err){}
-    try{await NativeAudio.unload({assetId:current});}catch(err){}
-  }
   if(browserAudio){
     try{browserAudio.pause();}catch(err){}
     browserAudio=null;
   }
+  if(!NativeAudio||!current)return;
+  if(soft){
+    try{await NativeAudio.stop({assetId:current,fadeOut:true,fadeOutDuration:EXIT_FADE_MS/1000});}catch(err){}
+    await wait(EXIT_FADE_MS);
+    if(epoch!==ambientEpoch)return;
+    try{await NativeAudio.unload({assetId:current});}catch(err){}
+    return;
+  }
+  try{await NativeAudio.stop({assetId:current});}catch(err){}
+  try{await NativeAudio.unload({assetId:current});}catch(err){}
 }
 
 function fillShutdownOptions(container,items,current,onPick){
