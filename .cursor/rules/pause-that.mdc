@@ -1,0 +1,21 @@
+---
+description: Pause That product laws. The build spec outranks older timer-based docs.
+alwaysApply: true
+---
+
+# Pause That
+
+Read `docs/pause-that-build-spec.md` before writing any screen. It is the contract. When it conflicts with `docs/NATIVE-V1-SCOPE.md`, `docs/SHUTDOWN-INTERACTION-SPEC.md`, or `docs/PRODUCT-V1-CANON.md`, the build spec wins.
+
+Non-negotiable:
+
+1. The worse the user feels, the less the app should ask from them.
+2. No timers, ever visible. No duration picker, no countdown, no "back on in 30 minutes," no "Overthinking is back on" message. A switch that was turned off quietly becomes available again later. The reset is silent. This includes Shutdown. Do not reintroduce durations, expirations, or remaining-time displays in code, tests, docs, or comments.
+3. No engagement mechanics. No streaks, guilt notifications, scores, dashboards, or badges.
+4. "That's enough" always ends the interaction. At most three follow-ups, and one is always "That's enough."
+5. Laugh with the user, never at the user.
+6. No clinical claims. Do not say therapy, treatment, disorder, or promise outcomes.
+7. Hold This never resurfaces on its own.
+8. Haptics reinforce, never carry. Every haptic has a visual twin.
+
+Do not commit a rework diff until the founder's design agent has reviewed it against the mockup and this spec.

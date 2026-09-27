@@ -2,295 +2,232 @@
 <html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f2f7">
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
-<title>Mel's Mind</title>
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0E0D0B">
+<title>Pause That</title>
 <style>
 :root{
-  color-scheme:light dark;
-  --page-bg:#111111;
-  --phone-bg:#000000;
-  --text:#ffffff;
-  --secondary:#98989f;
-  --card:#1c1c1e;
-  --divider:#38383a;
-  --toggle-off:#636366;
-  --banner-bg:rgba(44,44,46,.78);
-  --banner-border:rgba(255,255,255,.18);
-  --banner-highlight:rgba(255,255,255,.20);
-  --banner-shadow:rgba(0,0,0,.42);
-  --banner-app:#f2f2f7;
-  --banner-title:#ffffff;
-  --banner-message:#d1d1d6;
-  --sheet-bg:rgba(44,44,46,.84);
-  --sheet-cancel-bg:#2c2c2e;
-  --sheet-action:#0a84ff;
-  --sheet-pressed:rgba(255,255,255,.1);
-  --favorite:#ffd60a;
+  --paper:#0E0D0B;
+  --panel:#151310;
+  --soft:#24211D;
+  --ink:#F4EADC;
+  --muted:#AAA094;
+  --line:#35302A;
+  --accent:#F0DFC3;
+  --accent-ink:#17120A;
+  --signal:#F5A524;
+  --off:#3A342C;
+  --radius-card:18px;
+  --radius-row:12px;
+  --font-display:"Space Grotesk",-apple-system,BlinkMacSystemFont,sans-serif;
+  --font-body:Inter,-apple-system,BlinkMacSystemFont,sans-serif;
+  --font-label:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
 }
-body{margin:0;background:var(--page-bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial;display:flex;justify-content:center;padding:30px}
-.phone{width:390px;min-height:800px;background:var(--phone-bg);border-radius:45px;padding:21px;box-sizing:border-box;box-shadow:0 0 40px rgba(0,0,0,.78)}
-h1{font-size:32px;line-height:1.12;margin:5px 0}.sub{color:var(--secondary);font-size:15px;margin-bottom:22px}
-.section{color:var(--secondary);font-size:12px;text-transform:uppercase;letter-spacing:.02em;margin:20px 8px 7px}
-.card{background:var(--card);border-radius:15px;overflow:hidden}
-.row{height:57px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--divider)}
-.row:last-child{border:0}.name{display:flex;align-items:center;gap:11px;font-size:16px}.icon{width:24px;text-align:center;font-size:20px;line-height:1}
-.toggle{width:49px;height:29px;border-radius:18px;background:#34c759;position:relative;border:0;padding:0;cursor:pointer;transition:background-color .18s ease}.toggle.off{background:var(--toggle-off)}.knob{width:25px;height:25px;background:#fff;border-radius:50%;position:absolute;top:2px;right:2px;box-shadow:0 1px 3px rgba(0,0,0,.42);transition:transform .18s ease}.toggle.off .knob{right:2px;transform:translateX(-20px)}
-.restoring .toggle,.restoring .knob{transition:none}
-.controls{display:flex;align-items:center;gap:4px}
-.fav{width:44px;height:44px;border:0;padding:0;background:transparent;font:inherit;font-size:21px;line-height:1;color:var(--secondary);cursor:pointer;-webkit-tap-highlight-color:transparent}
-.fav[aria-pressed="true"]{color:var(--favorite)}
-.remove{height:44px;border:0;padding:0 2px;background:transparent;font:inherit;font-size:13px;font-weight:600;color:#ff453a;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.create{display:block;margin:22px 8px 4px;height:44px;border:0;padding:0 6px;background:transparent;color:var(--sheet-action);font:inherit;font-size:17px;font-weight:600;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.shutdown-entry{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:calc(100% - 16px);margin:0 8px 8px;padding:16px;border:0;border-radius:15px;background:var(--card);color:inherit;font:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.shutdown-entry-title{font-size:20px;font-weight:650}
-.shutdown-entry-sub{font-size:15px;color:var(--secondary)}
-.shutdown-view{position:fixed;inset:0;z-index:40;box-sizing:border-box;padding:calc(36px + env(safe-area-inset-top)) 28px calc(28px + env(safe-area-inset-bottom));background:#0b0c10;color:#e5e5ea}
-.shutdown-view[hidden]{display:none}
-.shutdown-kicker{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#8e8e93}
-.shutdown-remaining{margin-top:10px;font-size:64px;font-weight:600;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
-.shutdown-meta{margin-top:8px;font-size:17px;color:#aeaeb2}
-.shutdown-actions{display:flex;flex-direction:column;gap:10px}
-.shutdown-action,.shutdown-end{height:52px;border:0;border-radius:14px;background:#1c1c1e;color:#f2f2f7;font:inherit;font-size:17px;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.shutdown-end{background:transparent;color:#aeaeb2}
-.shutdown-atmosphere{position:absolute;inset:0;overflow:hidden;pointer-events:none}
-.shutdown-atmosphere i{position:absolute;inset:-16%;background:radial-gradient(ellipse at 42% 36%,rgba(58,74,92,.22),transparent 62%);opacity:.16}
-.shutdown-stage{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:space-between;min-height:100%}
-.shutdown-ephemeral{margin:0 0 12px;font-size:15px;line-height:1.35;color:#8e8e93;opacity:0;transition:opacity 1.2s ease}
-.shutdown-ephemeral.show{opacity:.7}
-.shutdown-view[data-motion="immersive"] .shutdown-atmosphere i{animation:shutdownDrift 16s ease-in-out infinite}
-.shutdown-view[data-motion="gentle"] .shutdown-atmosphere i{opacity:.1;animation:shutdownDrift 28s ease-in-out infinite}
-.shutdown-view[data-motion="minimal"] .shutdown-atmosphere i,.shutdown-view[data-motion="reduced"] .shutdown-atmosphere i{opacity:.05;animation:none}
-.shutdown-view[data-phase="still"][data-motion="immersive"] .shutdown-atmosphere i,.shutdown-view[data-phase="still"][data-motion="gentle"] .shutdown-atmosphere i{opacity:.08;animation-duration:36s}
-.phone.is-receding{filter:brightness(.55);opacity:.42;transform:scale(.985)}
-.phone.is-receding-soft{filter:brightness(.78);opacity:.72;transform:scale(.995)}
-@keyframes shutdownDrift{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(1.2%,-1%,0)}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:17px;line-height:1.6}
+body{min-height:100vh;padding:calc(20px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom))}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.045;background-image:radial-gradient(rgba(244,234,220,.7) .6px,transparent .6px);background-size:3px 3px}
+h1,h2,.display{font-family:var(--font-display);font-weight:650;letter-spacing:-.03em}
+.eyebrow{font-family:var(--font-label);font-size:11px;line-height:14px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin:22px 4px 8px}
+.shutdown-entry{display:block;width:100%;margin:0 0 8px;padding:16px 16px;border:1px solid var(--line);border-radius:var(--radius-card);background:var(--panel);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.shutdown-entry strong{display:block;font-family:var(--font-display);font-size:20px;line-height:26px;font-weight:600}
+.shutdown-entry span{display:block;color:var(--muted);font-size:15px}
+.filters{display:flex;gap:8px;margin:8px 0 4px}
+.filters button{height:36px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-card);overflow:hidden}
+.row{min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row.off{opacity:.72}
+.name{display:flex;align-items:center;gap:12px;font-size:17px}
+.icon{width:22px;text-align:center;color:var(--muted);font-size:16px}
+.toggle{width:51px;height:31px;border-radius:999px;border:0;padding:0;background:var(--accent);position:relative;cursor:pointer;flex:none}
+.toggle .thumb{width:27px;height:27px;border-radius:50%;background:#fff;position:absolute;top:2px;right:2px;transition:transform .55s ease-out}
+.toggle.off{background:var(--off)}
+.toggle.off .thumb{transform:translateX(-20px)}
+.toggle.release{box-shadow:0 0 0 3px rgba(245,165,36,.35)}
+.response{padding:0 14px 14px}
+.response[hidden]{display:none}
+.response p{margin:0 0 10px;color:var(--ink)}
+.need{margin:0 0 8px;color:var(--muted);font-size:13px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.actions button,.text-btn{border:1px solid var(--line);border-radius:999px;background:var(--soft);color:var(--ink);font:inherit;font-size:15px;padding:8px 12px;cursor:pointer}
+.screen{position:fixed;inset:0;z-index:5;background:var(--paper);padding:calc(28px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
+.screen[hidden]{display:none}
+.screen h2{margin:0;font-size:34px;line-height:40px}
+.line{font-size:22px;line-height:1.45}
+.back{align-self:flex-start;border:0;background:transparent;color:var(--muted);font:inherit;font-size:15px;padding:0;cursor:pointer}
+.field{width:100%;min-height:96px;border:1px solid var(--line);border-radius:var(--radius-row);background:var(--panel);color:var(--ink);font:inherit;padding:12px}
+.held-item{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.ripple{position:relative;height:220px;margin:12px 0 8px}
+.ripple i{position:absolute;left:50%;top:50%;width:80px;height:80px;margin:-40px 0 0 -40px;border:1px solid rgba(240,223,195,.45);border-radius:50%;animation:ripple 9s ease-out infinite}
+.ripple i:nth-child(2){animation-delay:-3s}
+.ripple i:nth-child(3){animation-delay:-6s}
+@keyframes ripple{0%{transform:scale(.6);opacity:.55}100%{transform:scale(2.6);opacity:0}}
+.sounds{display:flex;flex-wrap:wrap;gap:8px}
+.sounds button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 @media(prefers-reduced-motion:reduce){
-  .shutdown-atmosphere i{animation:none!important;opacity:.05!important}
-  .phone.is-receding,.phone.is-receding-soft{transform:none;filter:brightness(.85);opacity:.8}
+  .toggle .thumb{transition:none}
+  .ripple i{animation:none;opacity:.35;transform:none}
+  .ripple i:nth-child(1){transform:scale(.8)}
+  .ripple i:nth-child(2){transform:scale(1.3)}
+  .ripple i:nth-child(3){transform:scale(1.8)}
 }
-.creator-form{max-height:min(640px,calc(100vh - 24px - env(safe-area-inset-top)));overflow:auto}
-.field{display:block;padding:8px 16px 10px;border-bottom:1px solid var(--divider)}
-.field-label{display:block;font-size:12px;font-weight:600;color:var(--secondary);margin-bottom:4px}
-.field input,.field textarea{display:block;width:100%;box-sizing:border-box;border:0;margin:0;padding:2px 0;background:transparent;color:inherit;font:inherit;font-size:17px;resize:none}
-.duration-choice{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 16px;border-bottom:1px solid var(--divider);font-size:17px}
-.creator-error{padding:8px 16px 0;color:#ff453a;font-size:13px;font-weight:600}
-.creator-error:empty{display:none}
-.creator-save{font-weight:600}
-.deleter-confirm{color:#ff453a;font-weight:600}
-.notice{position:fixed;z-index:20;top:18px;left:50%;width:min(340px,calc(100vw - 28px));box-sizing:border-box;display:grid;grid-template-columns:38px minmax(0,1fr);gap:11px;align-items:start;padding:13px 13px 14px;border:1px solid var(--banner-border);border-radius:19px;background:var(--banner-bg);box-shadow:inset 0 1px 0 var(--banner-highlight),0 12px 34px var(--banner-shadow);backdrop-filter:blur(26px) saturate(145%);-webkit-backdrop-filter:blur(26px) saturate(145%);opacity:0;pointer-events:none;transform:translate(-50%,-130%);transition:transform .36s cubic-bezier(.2,.9,.25,1.18),opacity .24s ease}
-.notice.show{opacity:1;transform:translate(-50%,0)}
-.notice-icon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:20px;line-height:1;background:#5856d6}
-.notice-copy{min-width:0}.notice-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}.notice-app{font-size:12px;font-weight:600;color:var(--banner-app)}.notice-time{font-size:11px;color:var(--secondary)}.notice-title{font-size:14px;line-height:1.2;font-weight:600;color:var(--banner-title);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.notice-message{margin-top:4px;font-size:13px;line-height:1.3;color:var(--banner-message)}
-.chooser{position:fixed;inset:0;z-index:30;visibility:hidden;transition:visibility 0s linear .3s}
-.chooser.show{visibility:visible;transition-delay:0s}
-.chooser-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.4);opacity:0;transition:opacity .3s ease}
-.chooser.show .chooser-backdrop{opacity:1}
-.chooser-sheet{position:absolute;left:50%;bottom:0;width:min(400px,100%);box-sizing:border-box;padding:0 calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));transform:translate(-50%,100%);transition:transform .3s cubic-bezier(.2,.9,.25,1)}
-.chooser.show .chooser-sheet{transform:translate(-50%,0)}
-.chooser-group{background:var(--sheet-bg);border-radius:14px;overflow:hidden;margin-bottom:8px;backdrop-filter:blur(26px) saturate(145%);-webkit-backdrop-filter:blur(26px) saturate(145%)}
-.chooser-title{padding:14px 16px;text-align:center;font-size:13px;font-weight:600;line-height:1.3;color:var(--secondary);border-bottom:1px solid var(--divider)}
-.chooser-option,.chooser-cancel{display:block;width:100%;height:57px;border:0;padding:0;background:transparent;font:inherit;font-size:20px;color:var(--sheet-action);cursor:pointer;-webkit-tap-highlight-color:transparent}
-.chooser-option+.chooser-option{border-top:1px solid var(--divider)}
-.chooser-cancel{background:var(--sheet-cancel-bg);border-radius:14px;font-weight:600}
-.chooser-option:active,.chooser-cancel:active{background-image:linear-gradient(var(--sheet-pressed),var(--sheet-pressed))}
-@media(prefers-color-scheme:light){
-  :root{
-    --page-bg:#e5e5ea;
-    --phone-bg:#f2f2f7;
-    --text:#000000;
-    --secondary:#6e6e73;
-    --card:#ffffff;
-    --divider:rgba(60,60,67,.18);
-    --toggle-off:#e5e5ea;
-    --banner-bg:rgba(248,248,250,.76);
-    --banner-border:rgba(255,255,255,.82);
-    --banner-highlight:rgba(255,255,255,.92);
-    --banner-shadow:rgba(0,0,0,.18);
-    --banner-app:#3c3c43;
-    --banner-title:#000000;
-    --banner-message:#3c3c43;
-    --sheet-bg:rgba(248,248,250,.86);
-    --sheet-cancel-bg:#ffffff;
-    --sheet-action:#007aff;
-    --sheet-pressed:rgba(0,0,0,.06);
-    --favorite:#ffcc00;
-  }
-  .phone{box-shadow:0 0 40px rgba(0,0,0,.18)}
-}
-@media(max-width:520px){body{background:var(--phone-bg);padding:0}.phone{width:100%;min-height:100vh;border-radius:0;padding:calc(20px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));box-shadow:none}.notice{top:calc(10px + env(safe-area-inset-top))}}
 </style></head>
-<body><div class="phone">
-<h1>Mel's Mind</h1><div class="sub">Your brain. Your settings.</div>
-<button id="shutdownEntry" class="shutdown-entry" type="button">
-  <span class="shutdown-entry-title">Shutdown</span>
-  <span class="shutdown-entry-sub">Shut it all off.</span>
-</button>
-<div id="notice" class="notice" role="status" aria-live="polite">
-  <div id="noticeIcon" class="notice-icon">🧠</div>
-  <div class="notice-copy">
-    <div class="notice-meta"><span class="notice-app">Mel's Mind</span><span class="notice-time">now</span></div>
-    <div id="noticeTitle" class="notice-title">Overthinking</div>
-    <div id="noticeMessage" class="notice-message">You don't need to solve this right now.</div>
+<body>
+<main id="home">
+  <button id="shutdownEntry" class="shutdown-entry" type="button">
+    <strong>Shutdown</strong>
+    <span>Everything is too loud.</span>
+  </button>
+  <div id="filterRow" class="filters"></div>
+  <div id="pinnedSection" hidden>
+    <div class="eyebrow">Pinned</div>
+    <div id="pinned" class="card"></div>
   </div>
-</div>
-<div id="quickAccess" hidden><div class="section">Quick Access</div><div class="card" id="quick"></div></div>
-<div class="section">Mind Alerts</div><div class="card" id="mind"></div>
-<div class="section">Boundaries</div><div class="card" id="bounds"></div>
-<div id="mineSection" hidden><div class="section">My Switches</div><div class="card" id="mine"></div></div>
-<button id="createSwitch" class="create" type="button">+ Create a Switch</button>
-</div>
-<div id="chooser" class="chooser" aria-hidden="true">
-  <div id="chooserBackdrop" class="chooser-backdrop"></div>
-  <div class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="chooserTitle">
-    <div class="chooser-group">
-      <div id="chooserTitle" class="chooser-title">Pause for…</div>
-      <div id="chooserOptions"></div>
-    </div>
-    <button id="chooserCancel" class="chooser-cancel" type="button">Cancel</button>
+  <div id="mindSection">
+    <div class="eyebrow">Mind Alerts</div>
+    <div id="mind" class="card"></div>
   </div>
-</div>
-<div id="creator" class="chooser" aria-hidden="true">
-  <div id="creatorBackdrop" class="chooser-backdrop"></div>
-  <form id="creatorForm" class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="creatorTitle">
-    <div class="chooser-group creator-form">
-      <div id="creatorTitle" class="chooser-title">New Switch</div>
-      <div id="creatorError" class="creator-error" role="alert"></div>
-      <div id="creatorFields"></div>
-      <button id="creatorSave" class="chooser-option creator-save" type="submit">Create</button>
-    </div>
-    <button id="creatorCancel" class="chooser-cancel" type="button">Cancel</button>
-  </form>
-</div>
-<div id="deleter" class="chooser" aria-hidden="true">
-  <div id="deleterBackdrop" class="chooser-backdrop"></div>
-  <div id="deleterSheet" class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="deleterTitle" tabindex="-1">
-    <div class="chooser-group">
-      <div id="deleterTitle" class="chooser-title">Delete this switch?</div>
-      <button id="deleterConfirm" class="chooser-option deleter-confirm" type="button">Delete</button>
-    </div>
-    <button id="deleterCancel" class="chooser-cancel" type="button">Cancel</button>
+  <div id="boundsSection">
+    <div class="eyebrow">Boundaries</div>
+    <div id="bounds" class="card"></div>
   </div>
-</div>
-<div id="shutdownView" class="shutdown-view" hidden>
-  <div class="shutdown-atmosphere" aria-hidden="true"><i></i></div>
-  <div class="shutdown-stage">
-    <div>
-      <div class="shutdown-kicker">Shutdown</div>
-      <div id="shutdownRemaining" class="shutdown-remaining" role="timer" aria-live="off" aria-atomic="true">20:00</div>
-      <div id="shutdownSoundName" class="shutdown-meta">Brown Noise</div>
-    </div>
-    <p id="shutdownEphemeral" class="shutdown-ephemeral" hidden>Everything can be quiet now.</p>
-    <div class="shutdown-actions">
-      <button id="shutdownSoundButton" class="shutdown-action" type="button">Sound</button>
-      <button id="shutdownTimeButton" class="shutdown-action" type="button">Time</button>
-      <button id="shutdownTransitionButton" class="shutdown-action" type="button">Transition</button>
-      <button id="shutdownHapticsButton" class="shutdown-action" type="button">Haptics · On</button>
-      <button id="shutdownEnd" class="shutdown-end" type="button">End Shutdown</button>
-    </div>
-  </div>
-</div>
-<div id="shutdownTimeSheet" class="chooser" aria-hidden="true">
-  <div id="shutdownTimeBackdrop" class="chooser-backdrop"></div>
-  <div class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="shutdownTimeTitle">
-    <div class="chooser-group">
-      <div id="shutdownTimeTitle" class="chooser-title">Time</div>
-      <div id="shutdownTimeOptions"></div>
-    </div>
-    <button id="shutdownTimeCancel" class="chooser-cancel" type="button">Cancel</button>
-  </div>
-</div>
-<div id="shutdownSoundSheet" class="chooser" aria-hidden="true">
-  <div id="shutdownSoundBackdrop" class="chooser-backdrop"></div>
-  <div class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="shutdownSoundTitle">
-    <div class="chooser-group">
-      <div id="shutdownSoundTitle" class="chooser-title">Sound</div>
-      <div id="shutdownSoundOptions"></div>
-    </div>
-    <button id="shutdownSoundCancel" class="chooser-cancel" type="button">Cancel</button>
-  </div>
-</div>
-<div id="shutdownTransitionSheet" class="chooser" aria-hidden="true">
-  <div id="shutdownTransitionBackdrop" class="chooser-backdrop"></div>
-  <div class="chooser-sheet" role="dialog" aria-modal="true" aria-labelledby="shutdownTransitionTitle">
-    <div class="chooser-group">
-      <div id="shutdownTransitionTitle" class="chooser-title">Transition</div>
-      <div id="shutdownTransitionOptions"></div>
-    </div>
-    <button id="shutdownTransitionCancel" class="chooser-cancel" type="button">Cancel</button>
-  </div>
-</div>
-<script>
-const items=[
-{id:'overthinking',icon:'🧠',name:'Overthinking',message:'You don\'t need to solve this right now.',section:'mind'},
-{id:'spiraling',icon:'🌀',name:'Spiraling',message:'Pause. Take one deep breath.',section:'mind'},
-{id:'assuming',icon:'💭',name:'Assuming',message:'You don\'t have all the pieces yet.',section:'mind'},
-{id:'replaying-it',icon:'🔁',name:'Replaying It',message:'Let it rest.',section:'mind'},
-{id:'self-criticism',icon:'🪞',name:'Self-Criticism',message:'Talk to yourself like someone you love.',section:'mind'},
-{id:'thinking-worst-case',icon:'🌧️',name:'Thinking Worst Case',message:'You don\'t know the future yet.',section:'mind'},
-{id:'rabbit-hole',icon:'🐇',name:'Rabbit Hole',message:'Come back to where you are.',section:'mind'},
-{id:'need-to-know',icon:'🔍',name:'Need to Know',message:'Not everything needs to be solved in this moment.',section:'mind'},
-{id:'mental-noise',icon:'🔕',name:'Mental Noise',message:'Where could you find some quiet right now?',section:'mind'},
-{id:'access',icon:'🔐',name:'Access',message:'Access to you is not unlimited.',section:'bounds'},
-{id:'savior-mode',icon:'🛟',name:'Savior Mode',message:'You can care without carrying it.',section:'bounds'},
-{id:'feeling-obligated',icon:'⚖️',name:'Feeling Obligated',message:'A request is not a requirement.',section:'bounds'}
-];
-const notice=document.getElementById('notice');
-const noticeIcon=document.getElementById('noticeIcon');
-const noticeTitle=document.getElementById('noticeTitle');
-const noticeMessage=document.getElementById('noticeMessage');
-let noticeTimer;
-const phone=document.querySelector('.phone');
-const chooser=document.getElementById('chooser');
-const chooserBackdrop=document.getElementById('chooserBackdrop');
-const chooserTitle=document.getElementById('chooserTitle');
-const chooserOptions=document.getElementById('chooserOptions');
-const chooserCancel=document.getElementById('chooserCancel');
-let chooserFor=null;
-let chooserReturnFocus=null;
-let deleteFor=null;
-let deleteReturnFocus=null;
-const quickAccess=document.getElementById('quickAccess');
-const quickCard=document.getElementById('quick');
-const mineSection=document.getElementById('mineSection');
-const createSwitchButton=document.getElementById('createSwitch');
-const creator=document.getElementById('creator');
-const creatorForm=document.getElementById('creatorForm');
-const creatorFields=document.getElementById('creatorFields');
-const creatorError=document.getElementById('creatorError');
-const creatorCancel=document.getElementById('creatorCancel');
-const creatorBackdrop=document.getElementById('creatorBackdrop');
-const deleter=document.getElementById('deleter');
-const deleterSheet=document.getElementById('deleterSheet');
-const deleterTitle=document.getElementById('deleterTitle');
-const deleterConfirm=document.getElementById('deleterConfirm');
-const deleterCancel=document.getElementById('deleterCancel');
-const deleterBackdrop=document.getElementById('deleterBackdrop');
+  <button id="openHeld" class="text-btn" type="button">Held thoughts</button>
+</main>
 
-const DURATION_MINUTES=[2,5,15,30];
-const MAX_NAME=40;
-const MAX_MESSAGE=140;
-const DEFAULT_ICON='✨';
-const STORE_KEY='toggle.expirations.v1';
-const FAVORITES_KEY='toggle.favorites.v1';
-const CUSTOM_KEY='toggle.custom-switches.v1';
+<section id="wordsMe" class="screen" hidden>
+  <button id="wordsMeBack" class="back" type="button">Back</button>
+  <h2>Words for me</h2>
+  <p id="wordsMeLine" class="line"></p>
+  <button id="wordsMeAnother" class="text-btn" type="button">Another one</button>
+</section>
+
+<section id="wordsThem" class="screen" hidden>
+  <button id="wordsThemBack" class="back" type="button">Back</button>
+  <h2>What do you need to say?</h2>
+  <div id="scriptTabs" class="filters"></div>
+  <p id="scriptLine" class="line"></p>
+  <p class="need">No explanation is required.</p>
+  <div class="actions">
+    <button id="scriptCopy" type="button">Copy these words</button>
+    <button id="scriptAnother" type="button">Another one</button>
+  </div>
+  <p id="scriptCopied" class="need" hidden>Copied.</p>
+</section>
+
+<section id="held" class="screen" hidden>
+  <button id="heldBack" class="back" type="button">Back</button>
+  <h2>Hold this</h2>
+  <textarea id="heldField" class="field" maxlength="280" placeholder="Set it down."></textarea>
+  <button id="heldSave" class="text-btn" type="button">Save</button>
+  <div id="heldList"></div>
+</section>
+
+<section id="shutdownView" class="screen" hidden>
+  <div class="ripple" aria-hidden="true"><i></i><i></i><i></i></div>
+  <p id="shutdownLine" class="line">You can be quiet here.</p>
+  <div id="shutdownSounds" class="sounds"></div>
+  <button id="shutdownContinue" class="text-btn" type="button">Continue</button>
+  <button id="shutdownLeave" class="back" type="button">Leave</button>
+</section>
+
+<script>
+const SWITCHES=[
+  {id:'overthinking',name:'Overthinking',icon:'…',group:'mind',actions:['Words for me','Hold this'],lines:[
+    'We have held enough imaginary meetings about this. Adjourned.',
+    'You do not need to solve this right now.',
+    'If another hour of thinking fixed it, we would be done already.',
+    'This can stay unanswered.']},
+  {id:'spiraling',name:'Spiraling',icon:'🌀',group:'mind',actions:['Words for me'],lines:[
+    'Not every thought deserves a full production.',
+    'The spiral does not get the whole damn evening.',
+    'One thing is true: you can stop here.',
+    'No more laps around the same fear.']},
+  {id:'assuming',name:'Assuming',icon:'?',group:'mind',actions:['Words for me','Words for them'],lines:[
+    'We do not have enough evidence for this courtroom.',
+    'A guess in a trench coat is still a guess.',
+    'You can wait for actual information.',
+    'Your brain is writing dialogue for people who are not here.']},
+  {id:'replaying-it',name:'Replaying It',icon:'↻',group:'mind',actions:['Words for me','Hold this'],lines:[
+    'The scene does not change on the forty-third replay.',
+    'We saw it. We hated it. Roll credits.',
+    'You do not have to edit the past tonight.',
+    'This rerun has been cancelled.']},
+  {id:'self-criticism',name:'Self-Criticism',icon:'⚡',group:'mind',actions:['Words for me'],lines:[
+    'You are not required to bully yourself into being better.',
+    'That voice is loud, not correct.',
+    'You get to be a person, not a performance review.',
+    'Babe, we are not punching down at ourselves today.']},
+  {id:'thinking-worst-case',name:'Thinking Worst Case',icon:'☁',group:'mind',actions:['Words for me','Hold this'],lines:[
+    'Possible is not the same thing as happening.',
+    'Your brain skipped the trailer and wrote the disaster ending.',
+    'We are not rehearsing grief for an event that has not occurred.',
+    'No need to pre-suffer.']},
+  {id:'rabbit-hole',name:'Rabbit Hole',icon:'↓',group:'mind',actions:['Words for me'],lines:[
+    'The internet does not have the certainty you came here for.',
+    'Close the tabs, including the ones in your head.',
+    'More information is not always more clarity.',
+    'You have dug far enough for tonight.']},
+  {id:'need-to-know',name:'Need to Know',icon:'⌕',group:'mind',actions:['Words for me','Hold this'],lines:[
+    'You can survive not knowing yet.',
+    'The answer is not available. You are still allowed to rest.',
+    'Uncertainty is uncomfortable, not an emergency.',
+    'Leave the detective board alone for now.']},
+  {id:'mental-noise',name:'Mental Noise',icon:'∿',group:'mind',actions:['Words for me'],lines:[
+    'Nothing needs to be organized this second.',
+    'Let the radio play in another room.',
+    'The noise can exist without getting a response.',
+    'No minutes. No agenda. Just less.']},
+  {id:'access',name:'Access',icon:'⌂',group:'bounds',actions:['Words for me','Words for them'],lines:[
+    'Being reachable is not the same as being available.',
+    'You are allowed to close the door without a speech.',
+    'Nobody is owed immediate access to you.',
+    'Unavailable is a complete status.']},
+  {id:'savior-mode',name:'Savior Mode',icon:'○',group:'bounds',actions:['Words for me','Words for them'],lines:[
+    'Support is not the same as rescue.',
+    'You can care without taking over.',
+    'Their emergency does not automatically become your assignment.',
+    'Put the cape down. It needs a wash anyway.']},
+  {id:'feeling-obligated',name:'Feeling Obligated',icon:'∞',group:'bounds',actions:['Words for me','Words for them'],lines:[
+    'Their disappointment is not your fucking emergency.',
+    'A request is not a command.',
+    'You can say no without managing their reaction for them.',
+    'Guilt is not proof that you did something wrong.']}
+];
+const SCRIPTS={
+  'Say no':['I can’t do that.','No. I’m not available for this.'],
+  'Buy time':['I need a little time before I answer.','I’ll come back to this later.'],
+  'Set a boundary':['I can talk, but not about this right now.','I’m not able to take this on.']
+};
+const SOUNDS=[
+  {id:'brown-noise',name:'Brown Noise',file:'audio/brown-noise.wav'},
+  {id:'rain',name:'Rain',file:'audio/rain.wav'},
+  {id:'ocean',name:'Ocean',file:'audio/ocean.wav'},
+  {id:'quiet',name:'Quiet',file:null}
+];
+const PAUSED_KEY='toggle.paused.v1';
+const HELD_KEY='toggle.held.v1';
+const BAG_KEY='toggle.response-bag.v1';
 const plugins=(window.Capacitor&&window.Capacitor.Plugins)||{};
 const Preferences=plugins.Preferences;
-const App=plugins.App;
 const Haptics=plugins.Haptics;
-let expirations={};
-let favorites=[];
-let customs=[];
-let customSeq=0;
-let saving=Promise.resolve();
-let ready=false;
-const switches=[];
-const switchesById=new Map();
+const NativeAudio=plugins.NativeAudio;
+const home=document.getElementById('home');
+const mind=document.getElementById('mind');
+const bounds=document.getElementById('bounds');
+let paused=new Set();
+let bags={};
+let held=[];
+let filter='all';
+let activeSwitch=null;
+let scriptTab='Say no';
+let scriptBag={};
+let heldSeq=0;
+let ambientId=null;
+let ambientConfigured=false;
+let browserAudio=null;
+let shutdownStep='threshold';
 
 const storage={
   async read(key){
@@ -299,1108 +236,271 @@ const storage={
   },
   write(key,data){
     const value=JSON.stringify(data);
-    saving=saving
-      .then(()=>Preferences?Preferences.set({key,value}):localStorage.setItem(key,value))
-      .catch(()=>{});
-    return saving;
+    if(Preferences)return Preferences.set({key,value});
+    localStorage.setItem(key,value);
   }
 };
-
-const store={
-  async load(){
-    try{
-      const parsed=await storage.read(STORE_KEY);
-      return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:{};
-    }catch(err){
-      return {};
-    }
-  },
-  save(){
-    return storage.write(STORE_KEY,expirations);
-  }
-};
-
-const favoriteStore={
-  async load(){
-    try{
-      const parsed=await storage.read(FAVORITES_KEY);
-      if(!Array.isArray(parsed))return [];
-      return parsed.filter((id,n)=>typeof id==='string'&&switchesById.has(id)&&parsed.indexOf(id)===n);
-    }catch(err){
-      return [];
-    }
-  },
-  save(){
-    return storage.write(FAVORITES_KEY,favorites);
-  }
-};
-
-function oneEmoji(text){
-  const trimmed=String(text||'').trim();
-  if(!trimmed)return DEFAULT_ICON;
-  try{
-    if(typeof Intl!=='undefined'&&Intl.Segmenter){
-      const first=[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(trimmed)][0];
-      if(first)return first.segment;
-    }
-  }catch(err){}
-  return [...trimmed][0]||DEFAULT_ICON;
-}
-
-function validCustom(rec,seen){
-  if(!rec||typeof rec!=='object'||Array.isArray(rec))return null;
-  if(typeof rec.id!=='string'||!/^custom-[A-Za-z0-9-]{8,}$/.test(rec.id))return null;
-  if(seen.has(rec.id)||switchesById.has(rec.id))return null;
-  if(typeof rec.name!=='string'||typeof rec.message!=='string')return null;
-  const name=rec.name.trim();
-  const message=rec.message.trim();
-  if(!name||name.length>MAX_NAME||!message||message.length>MAX_MESSAGE)return null;
-  if(!DURATION_MINUTES.includes(rec.defaultDurationMinutes))return null;
-  seen.add(rec.id);
-  return {id:rec.id,name,message,icon:oneEmoji(rec.icon),defaultDurationMinutes:rec.defaultDurationMinutes};
-}
-
-const customStore={
-  async load(){
-    try{
-      const parsed=await storage.read(CUSTOM_KEY);
-      if(!Array.isArray(parsed))return [];
-      const seen=new Set();
-      return parsed.map(rec=>validCustom(rec,seen)).filter(Boolean);
-    }catch(err){
-      return [];
-    }
-  },
-  save(){
-    return storage.write(CUSTOM_KEY,customs);
-  }
-};
-
-function newCustomId(){
-  let unique=null;
-  try{
-    if(typeof crypto!=='undefined'&&crypto.randomUUID)unique=crypto.randomUUID();
-  }catch(err){}
-  if(!unique)unique=`${Date.now().toString(36)}-${customSeq.toString(36)}-${Math.random().toString(36).slice(2,10)}`;
-  customSeq+=1;
-  const id=`custom-${unique}`;
-  if(switchesById.has(id)||customs.some(c=>c.id===id))return newCustomId();
-  return id;
-}
 
 function haptic(style){
   if(!Haptics)return;
-  try{
-    Promise.resolve(Haptics.impact({style})).catch(()=>{});
-  }catch(err){}
+  try{Promise.resolve(Haptics.impact({style})).catch(()=>{});}catch(err){}
 }
 
-function renderSwitch(s){
-  s.toggles.forEach(t=>{
-    if(s.off)t.classList.add('off');
-    else t.classList.remove('off');
-    t.setAttribute('aria-label',`${s.off?'Turn on':'Turn off'} ${s.item.name}`);
-  });
+function el(tag,cls,text){
+  const node=document.createElement(tag);
+  if(cls)node.className=cls;
+  if(text!=null)node.textContent=text;
+  return node;
 }
 
-function renderFavorite(s){
-  const favorited=favorites.includes(s.id);
-  s.favButtons.forEach(b=>{
-    b.textContent=favorited?'★':'☆';
-    b.setAttribute('aria-pressed',String(favorited));
-    b.setAttribute('aria-label',favorited?`Remove ${s.item.name} from favorites`:`Add ${s.item.name} to favorites`);
-  });
+function nextLine(id,lines){
+  if(!bags[id]||!bags[id].length)bags[id]=lines.map((_,i)=>i).sort(()=>Math.random()-.5);
+  const index=bags[id].shift();
+  storage.write(BAG_KEY,bags);
+  return lines[index];
 }
 
-function renderQuickAccess(){
-  quickCard.replaceChildren(...favorites.map(id=>switchesById.get(id).quickRow));
-  quickAccess.hidden=favorites.length===0;
-  switches.forEach(renderFavorite);
-}
-
-function renderMine(){
-  mineSection.hidden=customs.length===0;
-}
-
-function setOn(s){
-  s.off=false;
-  renderSwitch(s);
-  clearTimeout(s.resetTimer);
-  s.resetTimer=null;
-}
-
-function setOff(s,expiresAt){
-  s.off=true;
-  renderSwitch(s);
-  clearTimeout(s.resetTimer);
-  s.resetTimer=setTimeout(reconcile,Math.max(0,expiresAt-Date.now()));
-}
-
-function reconcile(){
-  const now=Date.now();
-  let changed=false;
-  switches.forEach(s=>{
-    const expiresAt=expirations[s.id];
-    if(typeof expiresAt==='number'&&expiresAt>now){
-      setOff(s,expiresAt);
-      return;
-    }
-    if(s.id in expirations){
-      delete expirations[s.id];
-      changed=true;
-    }
-    setOn(s);
-  });
-  if(changed)store.save();
-}
-
-function pause(s,durationMs){
-  const i=s.item;
-  const expiresAt=Date.now()+durationMs;
-  expirations[s.id]=expiresAt;
-  store.save();
-  setOff(s,expiresAt);
-  haptic('MEDIUM');
-  noticeIcon.textContent=i.icon;
-  noticeTitle.textContent=i.name;
-  noticeMessage.textContent=i.message;
-  clearTimeout(noticeTimer);
-  notice.classList.remove('show');
-  requestAnimationFrame(()=>requestAnimationFrame(()=>notice.classList.add('show')));
-  noticeTimer=setTimeout(()=>notice.classList.remove('show'),4500);
-}
-
-function layoutChooser(s){
-  const def=s.item.defaultDurationMinutes;
-  const ordered=DURATION_MINUTES.map(m=>chooserOptions.children.find(b=>b.minutes===m)).filter(Boolean);
-  if(DURATION_MINUTES.includes(def)){
-    const i=ordered.findIndex(b=>b.minutes===def);
-    if(i>0)ordered.unshift(ordered.splice(i,1)[0]);
-  }
-  ordered.forEach(b=>{
-    b.textContent=b.minutes===def?`${b.minutes} minutes · Default`:`${b.minutes} minutes`;
-    chooserOptions.appendChild(b);
-  });
-}
-
-function openChooser(s,returnFocus){
-  if(creator.classList.contains('show')||deleter.classList.contains('show'))return;
-  chooserFor=s;
-  chooserReturnFocus=returnFocus;
-  chooserTitle.textContent=`Pause ${s.item.name} for…`;
-  layoutChooser(s);
-  chooser.classList.add('show');
-  chooser.setAttribute('aria-hidden','false');
-  phone.inert=true;
-  chooserOptions.children[0].focus({preventScroll:true});
-}
-
-function closeChooser(){
-  const s=chooserFor;
-  chooserFor=null;
-  chooser.classList.remove('show');
-  chooser.setAttribute('aria-hidden','true');
-  phone.inert=false;
-  if(chooserReturnFocus)chooserReturnFocus.focus({preventScroll:true});
-  chooserReturnFocus=null;
-  return s;
-}
-
-DURATION_MINUTES.forEach(minutes=>{
-  const b=document.createElement('button');
-  b.type='button';
-  b.className='chooser-option';
-  b.minutes=minutes;
-  b.textContent=`${minutes} minutes`;
-  b.onclick=()=>{
-    const s=closeChooser();
-    if(s&&!s.off)pause(s,minutes*60000);
-  };
-  chooserOptions.appendChild(b);
-});
-chooserCancel.onclick=closeChooser;
-chooserBackdrop.onclick=closeChooser;
-document.addEventListener('keydown',e=>{
-  if(e.key!=='Escape')return;
-  if(chooserFor)closeChooser();
-  else if(deleteFor)closeDeleter();
-  else if(creator.classList.contains('show'))closeCreator();
-  else if(shutdownSheet)closeShutdownSheet();
-});
-
-document.documentElement.classList.add('restoring');
-
-function onToggleTap(s,toggle){
-  if(!ready)return;
-
-  if(s.off){
-    delete expirations[s.id];
-    store.save();
-    setOn(s);
-    haptic('LIGHT');
-
-    if(noticeTitle.textContent===s.item.name){
-      clearTimeout(noticeTimer);
-      notice.classList.remove('show');
-    }
-    return;
-  }
-
-  openChooser(s,toggle);
-}
-
-function onFavoriteTap(s,button){
-  if(!ready)return;
-  const n=favorites.indexOf(s.id);
-  if(n===-1)favorites.push(s.id);
-  else favorites.splice(n,1);
-  favoriteStore.save();
-  renderQuickAccess();
-  if(n!==-1&&button===s.favButtons[1])s.favButtons[0].focus({preventScroll:true});
-}
-
-function el(tag,className,text){
-  const e=document.createElement(tag);
-  if(className)e.className=className;
-  if(text)e.textContent=text;
-  return e;
-}
-
-function buildRow(s){
+function makeRow(item){
   const row=el('div','row');
+  row.dataset.id=item.id;
   const name=el('div','name');
-  name.appendChild(el('span','icon',s.item.icon));
-  name.appendChild(el('span','',s.item.name));
-  const controls=el('div','controls');
-  const fav=el('button','fav');
-  fav.type='button';
-  fav.onclick=()=>onFavoriteTap(s,fav);
-  const toggle=el('button','toggle');
-  toggle.type='button';
-  toggle.appendChild(el('span','knob'));
-  toggle.onclick=()=>onToggleTap(s,toggle);
-  if(s.custom){
-    const del=el('button','remove','Delete');
-    del.type='button';
-    del.setAttribute('aria-label',`Delete ${s.item.name}`);
-    del.onclick=()=>openDeleter(s,del);
-    controls.appendChild(del);
-    s.deleteButtons.push(del);
+  name.append(el('span','icon',item.icon),el('span','',item.name));
+  const button=el('button','toggle');
+  button.type='button';
+  button.append(el('span','thumb'));
+  button.setAttribute('aria-label',item.name);
+  const response=el('div','response');
+  response.hidden=true;
+  const copy=el('p');
+  const need=el('p','need','What do you need?');
+  const actions=el('div','actions');
+  item.actions.concat(['That\'s enough']).slice(0,3).forEach(label=>{
+    const action=el('button','',label);
+    action.type='button';
+    action.onclick=()=>follow(item,label,response);
+    actions.append(action);
+  });
+  response.append(copy,need,actions);
+  button.onclick=()=>toggleSwitch(item,row,button,response,copy);
+  row.append(name,button);
+  const wrap=el('div');
+  wrap.append(row,response);
+  return wrap;
+}
+
+function toggleSwitch(item,row,button,response,copy){
+  const turningOff=!button.classList.contains('off');
+  if(turningOff){
+    button.classList.add('off','release');
+    row.classList.add('off');
+    paused.add(item.id);
+    copy.textContent=nextLine(item.id,item.lines);
+    response.hidden=false;
+    haptic('MEDIUM');
+    setTimeout(()=>button.classList.remove('release'),700);
+  }else{
+    button.classList.remove('off','release');
+    row.classList.remove('off');
+    paused.delete(item.id);
+    response.hidden=true;
+    haptic('LIGHT');
   }
-  controls.appendChild(fav);
-  controls.appendChild(toggle);
-  row.appendChild(name);
-  row.appendChild(controls);
-  s.favButtons.push(fav);
-  s.toggles.push(toggle);
-  return row;
+  button.setAttribute('aria-pressed',String(!turningOff));
+  storage.write(PAUSED_KEY,[...paused]);
 }
 
-function attach(s){
-  const row=buildRow(s);
-  s.rows.push(row);
-  document.getElementById(s.item.section).appendChild(row);
-  s.quickRow=buildRow(s);
-  s.rows.push(s.quickRow);
-  renderSwitch(s);
-  renderFavorite(s);
-  return s;
-}
-
-function makeSwitch(item,custom){
-  const s={id:item.id,item,custom:!!custom,off:false,toggles:[],favButtons:[],deleteButtons:[],rows:[],resetTimer:null,quickRow:null};
-  switches.push(s);
-  switchesById.set(s.id,s);
-  return attach(s);
-}
-
-function labeledInput(className,label,tag,maxLength){
-  const wrap=el('label','field');
-  wrap.appendChild(el('span','field-label',label));
-  const input=el(tag,className);
-  input.maxLength=maxLength;
-  input.setAttribute('maxlength',String(maxLength));
-  input.setAttribute('aria-required','true');
-  wrap.appendChild(input);
-  creatorFields.appendChild(wrap);
-  return input;
-}
-
-const nameInput=labeledInput('custom-name','Name','input',MAX_NAME);
-const messageInput=labeledInput('custom-message','Supportive message','textarea',MAX_MESSAGE);
-messageInput.removeAttribute('aria-required');
-messageInput.setAttribute('aria-required','true');
-const iconInput=labeledInput('custom-icon','Icon','input',16);
-iconInput.removeAttribute('aria-required');
-iconInput.setAttribute('aria-label','Icon, one emoji, optional');
-const durationGroup=el('div','field');
-durationGroup.setAttribute('role','radiogroup');
-durationGroup.setAttribute('aria-label','Default pause');
-durationGroup.appendChild(el('span','field-label','Default pause'));
-const durationInputs=DURATION_MINUTES.map(minutes=>{
-  const choice=el('label','duration-choice');
-  const input=el('input','custom-duration');
-  input.type='radio';
-  input.name='defaultDuration';
-  input.minutes=minutes;
-  input.setAttribute('aria-label',`${minutes} minutes`);
-  choice.appendChild(input);
-  choice.appendChild(el('span','',`${minutes} minutes`));
-  durationGroup.appendChild(choice);
-  return input;
-});
-creatorFields.appendChild(durationGroup);
-
-function resetCreator(){
-  nameInput.value='';
-  messageInput.value='';
-  iconInput.value='';
-  creatorError.textContent='';
-  durationInputs.forEach(input=>{input.checked=input.minutes===2;});
-}
-
-function openCreator(){
-  if(!ready||chooserFor||deleteFor)return;
-  resetCreator();
-  creator.classList.add('show');
-  creator.setAttribute('aria-hidden','false');
-  phone.inert=true;
-  nameInput.focus({preventScroll:true});
-}
-
-function closeCreator(){
-  creator.classList.remove('show');
-  creator.setAttribute('aria-hidden','true');
-  phone.inert=false;
-  createSwitchButton.focus({preventScroll:true});
-}
-
-function saveCustom(e){
-  if(e)e.preventDefault();
-  if(!ready)return;
-  const name=nameInput.value.trim();
-  const message=messageInput.value.trim();
-  if(!name||name.length>MAX_NAME){
-    creatorError.textContent='Add a name.';
-    nameInput.focus({preventScroll:true});
+function follow(item,label,response){
+  if(label==='That\'s enough'){
+    response.hidden=true;
+    haptic('LIGHT');
     return;
   }
-  if(!message||message.length>MAX_MESSAGE){
-    creatorError.textContent='Add a supportive message.';
-    messageInput.focus({preventScroll:true});
-    return;
-  }
-  const picked=durationInputs.find(input=>input.checked);
-  const record={
-    id:newCustomId(),
-    name,
-    message,
-    icon:oneEmoji(iconInput.value),
-    defaultDurationMinutes:picked?picked.minutes:2
-  };
-  customs.push(record);
-  customStore.save();
-  makeSwitch({...record,section:'mine'},true);
-  renderMine();
-  closeCreator();
+  activeSwitch=item;
+  if(label==='Words for me')openWordsMe(item);
+  else if(label==='Words for them')openWordsThem();
+  else if(label==='Hold this')openHeld(false);
 }
 
-function openDeleter(s,returnFocus){
-  if(!ready||chooserFor||creator.classList.contains('show'))return;
-  deleteFor=s;
-  deleteReturnFocus=returnFocus;
-  deleterTitle.textContent=`Delete ${s.item.name}?`;
-  deleter.classList.add('show');
-  deleter.setAttribute('aria-hidden','false');
-  phone.inert=true;
-  deleterSheet.focus({preventScroll:true});
+function show(screen){
+  ['wordsMe','wordsThem','held','shutdownView'].forEach(id=>{
+    document.getElementById(id).hidden=id!==screen;
+  });
+  home.hidden=!!screen;
 }
 
-function closeDeleter(){
-  deleteFor=null;
-  deleter.classList.remove('show');
-  deleter.setAttribute('aria-hidden','true');
-  phone.inert=false;
-  if(deleteReturnFocus)deleteReturnFocus.focus({preventScroll:true});
-  deleteReturnFocus=null;
+function openWordsMe(item){
+  document.getElementById('wordsMeLine').textContent=nextLine(item.id+':me',item.lines);
+  show('wordsMe');
 }
-
-function confirmDelete(){
-  const s=deleteFor;
-  if(!s)return;
-  deleteFor=null;
-  deleter.classList.remove('show');
-  deleter.setAttribute('aria-hidden','true');
-  phone.inert=false;
-  deleteReturnFocus=null;
-  customs=customs.filter(c=>c.id!==s.id);
-  customStore.save();
-  const n=favorites.indexOf(s.id);
-  if(n!==-1){
-    favorites.splice(n,1);
-    favoriteStore.save();
-  }
-  if(s.id in expirations){
-    delete expirations[s.id];
-    store.save();
-  }
-  clearTimeout(s.resetTimer);
-  s.rows.forEach(row=>row.remove());
-  const index=switches.indexOf(s);
-  if(index!==-1)switches.splice(index,1);
-  switchesById.delete(s.id);
-  if(noticeTitle.textContent===s.item.name){
-    clearTimeout(noticeTimer);
-    notice.classList.remove('show');
-  }
-  renderQuickAccess();
-  renderMine();
-  createSwitchButton.focus({preventScroll:true});
-}
-
-createSwitchButton.onclick=openCreator;
-creatorForm.onsubmit=saveCustom;
-creatorCancel.onclick=closeCreator;
-creatorBackdrop.onclick=closeCreator;
-deleterConfirm.onclick=confirmDelete;
-deleterCancel.onclick=closeDeleter;
-deleterBackdrop.onclick=closeDeleter;
-
-const SHUTDOWN_KEY='toggle.shutdown.v1';
-const SHUTDOWN_HAPTICS_KEY='toggle.shutdown-haptics.v1';
-const SHUTDOWN_MINUTES=[10,20,30,60];
-const SHUTDOWN_SOUNDS=[
-  {id:'brown-noise',name:'Brown Noise'},
-  {id:'rain',name:'Rain'},
-  {id:'ocean',name:'Ocean'},
-  {id:'quiet',name:'Quiet'}
-];
-const SHUTDOWN_TRANSITIONS=[
-  {id:'immersive',name:'Immersive'},
-  {id:'gentle',name:'Gentle'},
-  {id:'minimal',name:'Minimal'}
-];
-const SHUTDOWN_FACTORY={durationMinutes:20,sound:'brown-noise',transition:'immersive'};
-const AMBIENT_VOLUME=0.35;
-const AMBIENT_FLOOR=0.12;
-const EXIT_FADE_MS=800;
-const EPHEMERAL_IN_MS=400;
-const EPHEMERAL_HOLD_MS=3200;
-const EPHEMERAL_OUT_MS=1400;
-// One timeline per preset. Sweep audio starts with the threshold wash and is
-// scheduled to end at stillness, so nothing is cut short of its own duration.
-const SHUTDOWN_TIMELINE={
-  immersive:{thresholdMs:2500,sweepStartMs:0,sweepMs:11000,stillMs:11000,ambientFadeMs:8000,ephemeralMs:11400,thresholdVolume:0.22,sweepVolume:0.2,exitVolume:0.14,haptics:[[0,'MEDIUM'],[480,'HEAVY'],[1100,'LIGHT']]},
-  gentle:{thresholdMs:2000,sweepStartMs:0,sweepMs:7000,stillMs:7000,ambientFadeMs:5000,ephemeralMs:7400,thresholdVolume:0.1,sweepVolume:0.1,exitVolume:0.08,haptics:[[0,'MEDIUM'],[700,'LIGHT']]},
-  minimal:{thresholdMs:0,sweepStartMs:0,sweepMs:0,stillMs:1800,ambientFadeMs:1800,ephemeralMs:2200,thresholdVolume:0,sweepVolume:0,exitVolume:0,haptics:[[0,'LIGHT']]}
+document.getElementById('wordsMeAnother').onclick=()=>{
+  if(activeSwitch)document.getElementById('wordsMeLine').textContent=nextLine(activeSwitch.id+':me',activeSwitch.lines);
 };
-const shutdownView=document.getElementById('shutdownView');
-const shutdownRemaining=document.getElementById('shutdownRemaining');
-const shutdownSoundName=document.getElementById('shutdownSoundName');
-const shutdownEntry=document.getElementById('shutdownEntry');
-let shutdownState={defaults:{...SHUTDOWN_FACTORY},session:null};
-let shutdownHapticsOn=true;
-let shutdownTimer=null;
-let shutdownSheet=null;
-let transitionTimers=[];
-let transitionClips=new Set();
-let sweepCtx=null;
-let sweepStop=null;
+document.getElementById('wordsMeBack').onclick=()=>show(null);
 
-function shutdownName(list,id){
-  const found=list.find(item=>item.id===id);
-  return found?found.name:null;
+function openWordsThem(){
+  scriptTab='Say no';
+  renderScript();
+  show('wordsThem');
 }
-
-function validShutdownChoice(value,list,fallback){
-  return list.some(item=>item.id===value)?value:fallback;
+function renderScript(){
+  const tabs=document.getElementById('scriptTabs');
+  tabs.replaceChildren();
+  Object.keys(SCRIPTS).forEach(name=>{
+    const tab=el('button','',name);
+    tab.type='button';
+    tab.setAttribute('aria-pressed',String(name===scriptTab));
+    tab.onclick=()=>{scriptTab=name;renderScript();};
+    tabs.append(tab);
+  });
+  document.getElementById('scriptLine').textContent=nextLine('script:'+scriptTab,SCRIPTS[scriptTab]);
+  document.getElementById('scriptCopied').hidden=true;
 }
-
-function validShutdownDefaults(value){
-  const source=value&&typeof value==='object'?value:{};
-  const duration=SHUTDOWN_MINUTES.includes(source.durationMinutes)?source.durationMinutes:SHUTDOWN_FACTORY.durationMinutes;
-  return {
-    durationMinutes:duration,
-    sound:validShutdownChoice(source.sound,SHUTDOWN_SOUNDS,SHUTDOWN_FACTORY.sound),
-    transition:validShutdownChoice(source.transition,SHUTDOWN_TRANSITIONS,SHUTDOWN_FACTORY.transition)
-  };
-}
-
-function validShutdownSession(value){
-  if(!value||typeof value!=='object'||typeof value.endsAt!=='number'||!Number.isFinite(value.endsAt))return null;
-  const defaults=validShutdownDefaults(value);
-  return {...defaults,endsAt:value.endsAt};
-}
-
-const shutdownStore={
-  async load(){
-    try{
-      const parsed=await storage.read(SHUTDOWN_KEY);
-      if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return {defaults:{...SHUTDOWN_FACTORY},session:null};
-      return {defaults:validShutdownDefaults(parsed.defaults),session:validShutdownSession(parsed.session)};
-    }catch(err){
-      return {defaults:{...SHUTDOWN_FACTORY},session:null};
-    }
-  },
-  save(){
-    return storage.write(SHUTDOWN_KEY,{defaults:shutdownState.defaults,session:shutdownState.session});
-  }
+document.getElementById('scriptAnother').onclick=renderScript;
+document.getElementById('scriptCopy').onclick=async()=>{
+  const text=document.getElementById('scriptLine').textContent;
+  try{if(navigator.clipboard)await navigator.clipboard.writeText(text);}catch(err){}
+  document.getElementById('scriptCopied').hidden=false;
 };
+document.getElementById('wordsThemBack').onclick=()=>show(null);
 
-function formatRemaining(ms){
-  const total=Math.max(0,Math.ceil(ms/1000));
-  const minutes=Math.floor(total/60);
-  const seconds=total%60;
-  return `${minutes}:${String(seconds).padStart(2,'0')}`;
+function openHeld(listOnly){
+  document.getElementById('heldField').value='';
+  renderHeld();
+  show('held');
 }
-
-function renderShutdown(){
-  const session=shutdownState.session;
-  if(!session)return;
-  const remaining=session.endsAt-Date.now();
-  shutdownRemaining.textContent=formatRemaining(remaining);
-  shutdownRemaining.setAttribute('aria-label',`${formatRemaining(remaining)} remaining`);
-  const sound=shutdownName(SHUTDOWN_SOUNDS,session.sound);
-  const transition=shutdownName(SHUTDOWN_TRANSITIONS,session.transition);
-  shutdownSoundName.textContent=sound;
-  document.getElementById('shutdownSoundButton').textContent=`Sound · ${sound}`;
-  document.getElementById('shutdownTimeButton').textContent=`Time · ${session.durationMinutes} minutes`;
-  document.getElementById('shutdownTransitionButton').textContent=`Transition · ${transition}`;
-  document.getElementById('shutdownHapticsButton').textContent=`Haptics · ${shutdownHapticsOn?'On':'Off'}`;
-}
-
-function showShutdown(){
-  shutdownView.hidden=false;
-  shutdownView.setAttribute('aria-hidden','false');
-  phone.hidden=true;
-  phone.setAttribute('aria-hidden','true');
-  renderShutdown();
-}
-
-function showMain(){
-  shutdownView.hidden=true;
-  shutdownView.setAttribute('aria-hidden','true');
-  phone.hidden=false;
-  phone.removeAttribute('aria-hidden');
-}
-
-function scheduleShutdownTick(){
-  clearTimeout(shutdownTimer);
-  shutdownTimer=null;
-  if(!shutdownState.session)return;
-  const remaining=shutdownState.session.endsAt-Date.now();
-  if(remaining<=0){
-    endShutdown(false);
-    return;
-  }
-  shutdownTimer=setTimeout(()=>{
-    if(!shutdownState.session)return;
-    if(shutdownState.session.endsAt<=Date.now())endShutdown(false);
-    else{
-      renderShutdown();
-      scheduleShutdownTick();
-    }
-  },Math.min(1000,remaining));
-}
-
-function closeShutdownSheet(){
-  if(!shutdownSheet)return;
-  shutdownSheet.classList.remove('show');
-  shutdownSheet.setAttribute('aria-hidden','true');
-  shutdownSheet=null;
-}
-
-function openShutdownSheet(sheet){
-  if(!shutdownState.session)return;
-  closeShutdownSheet();
-  shutdownSheet=sheet;
-  sheet.classList.add('show');
-  sheet.setAttribute('aria-hidden','false');
-  const first=sheet.querySelector('button');
-  if(first)first.focus({preventScroll:true});
-}
-
-function prefersReducedMotion(){
-  try{
-    return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  }catch(err){
-    return false;
-  }
-}
-
-function visualMotion(transition){
-  if(prefersReducedMotion())return 'reduced';
-  if(transition==='gentle'||transition==='minimal')return transition;
-  return 'immersive';
-}
-
-function clearTransitionTimers(){
-  transitionTimers.forEach(id=>clearTimeout(id));
-  transitionTimers=[];
-}
-
-function hideEphemeral(){
-  const line=document.getElementById('shutdownEphemeral');
-  line.hidden=true;
-  line.classList.remove('show');
-}
-
-function setShutdownPhase(phase){
-  shutdownView.setAttribute('data-phase',phase);
-}
-
-function applyEnterVisual(transition){
-  const motion=visualMotion(transition);
-  shutdownView.setAttribute('data-motion',motion);
-  phone.classList.remove('is-receding','is-receding-soft');
-  if(motion==='immersive')phone.classList.add('is-receding');
-  else if(motion==='gentle')phone.classList.add('is-receding-soft');
-}
-
-// Backgrounding or relaunching during entry aborts the cinematic transition.
-// Returning restores the active session directly in Stillness and does not replay it.
-function applyRestoredVisual(transition){
-  clearTransitionTimers();
-  hideEphemeral();
-  if(sweepStop){try{sweepStop();}catch(err){}sweepStop=null;}
-  shutdownView.setAttribute('data-motion',visualMotion(transition));
-  setShutdownPhase('still');
-  phone.classList.remove('is-receding','is-receding-soft');
-}
-
-function shutdownTimeline(style){
-  return SHUTDOWN_TIMELINE[style]||SHUTDOWN_TIMELINE.immersive;
-}
-
-function armShutdownHaptics(steps){
-  if(!shutdownHapticsOn)return;
-  steps.forEach(([delay,style])=>{
-    const fire=()=>{if(shutdownState.session)haptic(style);};
-    if(delay<=0)fire();
-    else transitionTimers.push(setTimeout(fire,delay));
+function renderHeld(){
+  const list=document.getElementById('heldList');
+  list.replaceChildren();
+  held.forEach(item=>{
+    const row=el('div','held-item');
+    row.append(el('span','',item.text));
+    const remove=el('button','','Let this go');
+    remove.type='button';
+    remove.onclick=()=>{held=held.filter(entry=>entry.id!==item.id);storage.write(HELD_KEY,held);renderHeld();};
+    row.append(remove);
+    list.append(row);
   });
 }
-
-function scheduleEphemeral(atMs){
-  const line=document.getElementById('shutdownEphemeral');
-  transitionTimers.push(setTimeout(()=>{
-    if(!shutdownState.session)return;
-    line.hidden=false;
-    line.classList.add('show');
-    transitionTimers.push(setTimeout(()=>{
-      line.classList.remove('show');
-      transitionTimers.push(setTimeout(()=>{line.hidden=true;},EPHEMERAL_OUT_MS));
-    },EPHEMERAL_HOLD_MS));
-  },atMs));
-}
-
-function scheduleTransition(plan){
-  if(plan.thresholdMs>0){
-    transitionTimers.push(setTimeout(()=>{
-      if(shutdownState.session)setShutdownPhase('sweep');
-    },plan.thresholdMs));
-  }
-  transitionTimers.push(setTimeout(()=>{
-    if(!shutdownState.session)return;
-    setShutdownPhase('still');
-    stopNativeClips();
-  },plan.stillMs));
-  scheduleEphemeral(plan.ephemeralMs);
-}
-
-function wait(ms){
-  return new Promise(resolve=>setTimeout(resolve,ms));
-}
-
-async function startWebSweep(plan){
-  const AC=window.AudioContext||window.webkitAudioContext;
-  if(!AC||plan.sweepMs<=0)return false;
-  let created=false;
-  let source=null;
-  let started=false;
-  try{
-    if(!sweepCtx){
-      sweepCtx=new AC();
-      created=true;
-    }
-    const ctx=sweepCtx;
-    if(ctx.state==='suspended')await ctx.resume();
-    if(ctx.state!=='running')throw new Error('audio context unusable');
-    const gentle=plan.sweepVolume<=0.1;
-    const seconds=plan.sweepMs/1000;
-    const width=gentle?0.42:1;
-    const frames=ctx.sampleRate;
-    const buffer=ctx.createBuffer(2,frames,ctx.sampleRate);
-    const left=buffer.getChannelData(0);
-    const right=buffer.getChannelData(1);
-    let seed=0.2;
-    for(let i=0;i<frames;i++){
-      seed=(seed*16807)%2147483647;
-      const n=(seed/2147483647)*2-1;
-      left[i]=n*0.35;
-      right[i]=left[Math.max(0,i-180)]*0.65+n*0.2;
-    }
-    source=ctx.createBufferSource();
-    source.buffer=buffer;
-    source.loop=true;
-    const filter=ctx.createBiquadFilter();
-    filter.type='lowpass';
-    const delay=ctx.createDelay(0.05);
-    const panner=ctx.createStereoPanner();
-    const gain=ctx.createGain();
-    const t=ctx.currentTime+(plan.sweepStartMs/1000);
-    filter.frequency.setValueAtTime(gentle?1200:2200,t);
-    filter.frequency.linearRampToValueAtTime(gentle?480:360,t+seconds);
-    delay.delayTime.setValueAtTime(0.004,t);
-    delay.delayTime.linearRampToValueAtTime(gentle?0.012:0.028,t+seconds*0.72);
-    delay.delayTime.linearRampToValueAtTime(0.006,t+seconds);
-    panner.pan.setValueAtTime(-width,t);
-    panner.pan.linearRampToValueAtTime(0,t+seconds*0.3);
-    panner.pan.linearRampToValueAtTime(width*0.8,t+seconds*0.55);
-    panner.pan.linearRampToValueAtTime(0.05,t+seconds*0.8);
-    panner.pan.linearRampToValueAtTime(0,t+seconds);
-    const peak=gentle?0.05:0.11;
-    gain.gain.setValueAtTime(0.0001,t);
-    gain.gain.linearRampToValueAtTime(peak,t+0.8);
-    gain.gain.linearRampToValueAtTime(peak*0.7,t+seconds*0.55);
-    gain.gain.linearRampToValueAtTime(0.0001,t+seconds);
-    source.connect(filter);
-    filter.connect(delay);
-    delay.connect(panner);
-    panner.connect(gain);
-    gain.connect(ctx.destination);
-    source.start(t);
-    started=true;
-    source.stop(t+seconds);
-    sweepStop=()=>{try{source.stop();}catch(err){}};
-    return true;
-  }catch(err){
-    sweepStop=null;
-    if(started){try{source.stop();}catch(e){}}
-    if(created&&sweepCtx){
-      try{if(sweepCtx.close)await sweepCtx.close();}catch(e){}
-      sweepCtx=null;
-    }
-    return false;
-  }
-}
-
-async function playNativeClip(id,volume){
-  if(!NativeAudio)return;
-  try{
-    await configureAmbient();
-    await NativeAudio.preload({assetId:id,assetPath:`audio/${id}.wav`,audioChannelNum:1,isUrl:false,volume});
-    await NativeAudio.play({assetId:id,volume});
-    transitionClips.add(id);
-  }catch(err){}
-}
-
-async function stopNativeClips(){
-  if(sweepStop){try{sweepStop();}catch(err){}sweepStop=null;}
-  const ids=[...transitionClips];
-  transitionClips.clear();
-  if(!NativeAudio)return;
-  for(const id of ids){
-    try{await NativeAudio.stop({assetId:id});}catch(err){}
-    try{await NativeAudio.unload({assetId:id});}catch(err){}
-  }
-}
-
-async function beginTransition(style){
-  const plan=shutdownTimeline(style);
-  clearTransitionTimers();
-  hideEphemeral();
-  setShutdownPhase(style==='minimal'?'fade':'threshold');
-  armShutdownHaptics(plan.haptics);
-  if(style!=='minimal'){
-    let web=false;
-    try{web=await startWebSweep(plan);}catch(err){web=false;}
-    try{
-      await playNativeClip('threshold-enter',plan.thresholdVolume);
-      if(!web)await playNativeClip('sweep-texture',plan.sweepVolume);
-    }catch(err){}
-  }
-  scheduleTransition(plan);
-}
-
-async function loadShutdownHaptics(){
-  try{
-    const parsed=await storage.read(SHUTDOWN_HAPTICS_KEY);
-    shutdownHapticsOn=parsed!==false;
-  }catch(err){
-    shutdownHapticsOn=true;
-  }
-}
-
-function beginShutdown(){
-  if(!ready||shutdownState.session)return;
-  const defaults=shutdownState.defaults;
-  shutdownState.session={
-    endsAt:Date.now()+defaults.durationMinutes*60000,
-    durationMinutes:defaults.durationMinutes,
-    sound:defaults.sound,
-    transition:defaults.transition
-  };
-  shutdownStore.save();
-  showShutdown();
-  applyEnterVisual(defaults.transition);
-  scheduleShutdownTick();
-  const plan=shutdownTimeline(defaults.transition);
-  syncAmbient({fadeIn:true,fadeMs:plan.ambientFadeMs}).then(()=>beginTransition(defaults.transition)).catch(()=>{});
-}
-
-// Changing the duration restarts from now. The session ends at the moment of the change plus the newly chosen length.
-function setShutdownDuration(minutes){
-  if(!shutdownState.session||!SHUTDOWN_MINUTES.includes(minutes))return;
-  shutdownState.session.endsAt=Date.now()+minutes*60000;
-  shutdownState.session.durationMinutes=minutes;
-  shutdownState.defaults.durationMinutes=minutes;
-  shutdownStore.save();
-  closeShutdownSheet();
-  renderShutdown();
-  scheduleShutdownTick();
-}
-
-function setShutdownSound(id){
-  if(!shutdownState.session||!shutdownName(SHUTDOWN_SOUNDS,id))return;
-  shutdownState.session.sound=id;
-  shutdownState.defaults.sound=id;
-  shutdownStore.save();
-  closeShutdownSheet();
-  renderShutdown();
-  syncAmbient();
-}
-
-function setShutdownTransition(id){
-  if(!shutdownState.session||!shutdownName(SHUTDOWN_TRANSITIONS,id))return;
-  shutdownState.session.transition=id;
-  shutdownState.defaults.transition=id;
-  shutdownStore.save();
-  closeShutdownSheet();
-  renderShutdown();
-}
-
-function endShutdown(manual){
-  const style=shutdownState.session&&shutdownState.session.transition;
-  closeShutdownSheet();
-  clearTimeout(shutdownTimer);
-  shutdownTimer=null;
-  clearTransitionTimers();
-  hideEphemeral();
-  phone.classList.remove('is-receding','is-receding-soft');
-  shutdownState.session=null;
-  shutdownStore.save();
-  showMain();
-  const exitVolume=style&&shutdownTimeline(style).exitVolume;
-  stopNativeClips().then(()=>{
-    if(manual&&exitVolume)return playNativeClip('threshold-exit',exitVolume);
-  }).then(()=>stopAmbient(!!manual)).catch(()=>{});
-  if(manual&&shutdownHapticsOn)haptic('LIGHT');
-}
-
-function reconcileShutdown(){
-  const session=shutdownState.session;
-  if(!session){
-    showMain();
-    return;
-  }
-  if(session.endsAt<=Date.now()){
-    endShutdown(false);
-    return;
-  }
-  showShutdown();
-  applyRestoredVisual(session.transition);
-  scheduleShutdownTick();
-  syncAmbient();
-}
-
-const AMBIENT_FILES={
-  'brown-noise':'audio/brown-noise.wav',
-  rain:'audio/rain.wav',
-  ocean:'audio/ocean.wav'
+document.getElementById('heldSave').onclick=()=>{
+  const text=document.getElementById('heldField').value.trim();
+  if(!text)return;
+  heldSeq+=1;
+  held.push({id:'held-'+heldSeq,text,switchId:activeSwitch&&activeSwitch.id});
+  storage.write(HELD_KEY,held);
+  document.getElementById('heldField').value='';
+  renderHeld();
 };
-const NativeAudio=plugins.NativeAudio;
-let ambientId=null;
-let ambientQueue=Promise.resolve();
-let ambientConfigured=false;
-let browserAudio=null;
+document.getElementById('heldBack').onclick=()=>show(null);
+document.getElementById('openHeld').onclick=()=>openHeld(true);
 
-let ambientFadeIn=false;
-let ambientFadeMs=0;
-let ambientEpoch=0;
-let browserRampTimer=null;
-
-function syncAmbient(opts){
-  ambientFadeIn=!!(opts&&opts.fadeIn);
-  ambientFadeMs=opts&&opts.fadeMs?opts.fadeMs:0;
-  const sound=shutdownState.session&&shutdownState.session.sound;
-  const wanted=sound&&AMBIENT_FILES[sound]?sound:null;
-  ambientQueue=ambientQueue.then(()=>applyAmbient(wanted)).catch(()=>{});
-  return ambientQueue;
-}
-
-async function configureAmbient(){
-  if(!NativeAudio||ambientConfigured)return;
-  await NativeAudio.configure({background:true,ignoreSilent:true,focus:true,showNotification:false});
-  ambientConfigured=true;
-}
-
-function cancelBrowserRamp(){
-  if(browserRampTimer)clearTimeout(browserRampTimer);
-  browserRampTimer=null;
-}
-
-function rampBrowserVolume(audio,from,to,ms){
-  cancelBrowserRamp();
-  audio.volume=from;
-  const steps=8;
-  const stepMs=Math.max(1,Math.round(ms/steps));
-  let i=0;
-  const tick=()=>{
-    if(browserAudio!==audio)return;
-    i+=1;
-    const t=Math.min(1,i/steps);
-    audio.volume=from+(to-from)*t;
-    if(t<1)browserRampTimer=setTimeout(tick,stepMs);
-    else browserRampTimer=null;
-  };
-  browserRampTimer=setTimeout(tick,stepMs);
-}
-
-async function applyAmbient(wanted){
-  const fade=ambientFadeIn;
-  const fadeMs=ambientFadeMs;
-  ambientFadeIn=false;
-  ambientFadeMs=0;
-  if(ambientId===wanted)return;
-  const epoch=++ambientEpoch;
-  await stopAmbient(false);
-  if(epoch!==ambientEpoch)return;
-  if(!wanted)return;
-  try{
-    if(NativeAudio){
-      await configureAmbient();
-      await NativeAudio.preload({assetId:wanted,assetPath:AMBIENT_FILES[wanted],audioChannelNum:1,isUrl:false,volume:AMBIENT_VOLUME});
-      await NativeAudio.loop({assetId:wanted});
-      if(epoch!==ambientEpoch)return;
-      ambientId=wanted;
-      if(fade){
-        try{await NativeAudio.setVolume({assetId:wanted,volume:AMBIENT_FLOOR,duration:0});}catch(err){}
-        try{await NativeAudio.setVolume({assetId:wanted,volume:AMBIENT_VOLUME,duration:fadeMs/1000});}catch(err){}
-      }
-      return;
+function renderBoard(){
+  mind.replaceChildren();
+  bounds.replaceChildren();
+  SWITCHES.forEach(item=>{
+    if(filter==='mind'&&item.group!=='mind')return;
+    if(filter==='bounds'&&item.group!=='bounds')return;
+    const wrap=makeRow(item);
+    (item.group==='mind'?mind:bounds).append(wrap);
+    if(paused.has(item.id)){
+      const button=wrap.querySelector('.toggle');
+      button.classList.add('off');
+      wrap.querySelector('.row').classList.add('off');
     }
-    if(typeof Audio==='undefined')return;
-    const audio=new Audio(AMBIENT_FILES[wanted]);
-    audio.loop=true;
-    audio.volume=AMBIENT_VOLUME;
-    await audio.play();
-    if(epoch!==ambientEpoch)return;
-    browserAudio=audio;
-    ambientId=wanted;
-    if(fade)rampBrowserVolume(audio,AMBIENT_FLOOR,AMBIENT_VOLUME,fadeMs);
-  }catch(err){
-    if(epoch===ambientEpoch)ambientId=null;
-  }
+  });
+  document.getElementById('mindSection').hidden=filter==='bounds';
+  document.getElementById('boundsSection').hidden=filter==='mind';
 }
 
-async function stopAmbient(soft){
-  cancelBrowserRamp();
-  const current=ambientId;
-  const epoch=ambientEpoch;
-  ambientId=null;
-  if(browserAudio){
-    try{browserAudio.pause();}catch(err){}
-    browserAudio=null;
-  }
-  if(!NativeAudio||!current)return;
-  if(soft){
-    try{await NativeAudio.stop({assetId:current,fadeOut:true,fadeOutDuration:EXIT_FADE_MS/1000});}catch(err){}
-    await wait(EXIT_FADE_MS);
-    if(epoch!==ambientEpoch)return;
-    try{await NativeAudio.unload({assetId:current});}catch(err){}
-    return;
-  }
-  try{await NativeAudio.stop({assetId:current});}catch(err){}
-  try{await NativeAudio.unload({assetId:current});}catch(err){}
-}
-
-function fillShutdownOptions(container,items,current,onPick){
-  items.forEach(item=>{
-    const button=el('button','chooser-option',item.label);
+function renderFilters(){
+  const row=document.getElementById('filterRow');
+  row.replaceChildren();
+  [['all','All'],['mind','Mind Alerts'],['bounds','Boundaries']].forEach(([id,label])=>{
+    const button=el('button','',label);
     button.type='button';
-    button.setAttribute('aria-pressed',String(item.id===current));
-    button.onclick=()=>onPick(item.id);
-    container.appendChild(button);
+    button.setAttribute('aria-pressed',String(filter===id));
+    button.onclick=()=>{filter=id;renderFilters();renderBoard();};
+    row.append(button);
   });
 }
 
-function refillShutdownSheet(container,items,current,onPick){
-  container.replaceChildren();
-  fillShutdownOptions(container,items,current,onPick);
-}
-
-shutdownEntry.onclick=beginShutdown;
-document.getElementById('shutdownHapticsButton').onclick=()=>{
-  shutdownHapticsOn=!shutdownHapticsOn;
-  storage.write(SHUTDOWN_HAPTICS_KEY,shutdownHapticsOn);
-  renderShutdown();
-};
-document.getElementById('shutdownEnd').onclick=()=>endShutdown(true);
-document.getElementById('shutdownTimeButton').onclick=()=>{
-  refillShutdownSheet(
-    document.getElementById('shutdownTimeOptions'),
-    SHUTDOWN_MINUTES.map(minutes=>({id:minutes,label:`${minutes} minutes`})),
-    shutdownState.session&&shutdownState.session.durationMinutes,
-    setShutdownDuration
-  );
-  openShutdownSheet(document.getElementById('shutdownTimeSheet'));
-};
-document.getElementById('shutdownSoundButton').onclick=()=>{
-  refillShutdownSheet(
-    document.getElementById('shutdownSoundOptions'),
-    SHUTDOWN_SOUNDS.map(sound=>({id:sound.id,label:sound.name})),
-    shutdownState.session&&shutdownState.session.sound,
-    setShutdownSound
-  );
-  openShutdownSheet(document.getElementById('shutdownSoundSheet'));
-};
-document.getElementById('shutdownTransitionButton').onclick=()=>{
-  refillShutdownSheet(
-    document.getElementById('shutdownTransitionOptions'),
-    SHUTDOWN_TRANSITIONS.map(style=>({id:style.id,label:style.name})),
-    shutdownState.session&&shutdownState.session.transition,
-    setShutdownTransition
-  );
-  openShutdownSheet(document.getElementById('shutdownTransitionSheet'));
-};
-['shutdownTimeCancel','shutdownSoundCancel','shutdownTransitionCancel','shutdownTimeBackdrop','shutdownSoundBackdrop','shutdownTransitionBackdrop'].forEach(id=>{
-  document.getElementById(id).onclick=closeShutdownSheet;
-});
-
-items.forEach(i=>makeSwitch(i,false));
-
-Promise.all([store.load(),customStore.load(),shutdownStore.load(),loadShutdownHaptics()]).then(([saved,savedCustoms,savedShutdown])=>{
-  customs=savedCustoms;
-  customs.forEach(rec=>makeSwitch({...rec,section:'mine'},true));
-  renderMine();
-  shutdownState=savedShutdown;
-  return favoriteStore.load().then(savedFavorites=>{
-    expirations=saved;
-    favorites=savedFavorites;
-    reconcile();
-    renderQuickAccess();
-    reconcileShutdown();
-    ready=true;
-    requestAnimationFrame(()=>requestAnimationFrame(()=>document.documentElement.classList.remove('restoring')));
+function renderSounds(){
+  const box=document.getElementById('shutdownSounds');
+  box.replaceChildren();
+  SOUNDS.forEach(sound=>{
+    const button=el('button','',sound.name);
+    button.type='button';
+    button.setAttribute('aria-pressed',String(ambientId===sound.id||(sound.id==='quiet'&&!ambientId&&shutdownStep==='still')));
+    button.onclick=()=>playSound(sound);
+    box.append(button);
   });
-});
-
-function onForeground(){
-  if(!ready)return;
-  reconcile();
-  reconcileShutdown();
 }
-if(App)App.addListener('appStateChange',state=>{if(state.isActive)onForeground();});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')onForeground();});
+
+async function playSound(sound){
+  shutdownStep='still';
+  document.getElementById('shutdownLine').textContent='';
+  document.getElementById('shutdownContinue').hidden=true;
+  await stopAmbient();
+  if(sound.file){
+    try{
+      if(NativeAudio){
+        if(!ambientConfigured){
+          await NativeAudio.configure({background:true,ignoreSilent:true,focus:true,showNotification:false});
+          ambientConfigured=true;
+        }
+        await NativeAudio.preload({assetId:sound.id,assetPath:sound.file,audioChannelNum:1,isUrl:false,volume:0.35});
+        await NativeAudio.loop({assetId:sound.id});
+        ambientId=sound.id;
+      }else if(typeof Audio!=='undefined'){
+        const audio=new Audio(sound.file);
+        audio.loop=true;
+        audio.volume=0.35;
+        await audio.play();
+        browserAudio=audio;
+        ambientId=sound.id;
+      }
+    }catch(err){ambientId=null;}
+  }else ambientId=null;
+  renderSounds();
+}
+
+async function stopAmbient(){
+  const current=ambientId;
+  ambientId=null;
+  if(NativeAudio&&current){
+    try{await NativeAudio.stop({assetId:current});}catch(err){}
+    try{await NativeAudio.unload({assetId:current});}catch(err){}
+  }
+  if(browserAudio){try{browserAudio.pause();}catch(err){}browserAudio=null;}
+}
+
+function openShutdown(){
+  shutdownStep='threshold';
+  document.getElementById('shutdownLine').textContent='You can be quiet here.';
+  document.getElementById('shutdownContinue').hidden=false;
+  document.getElementById('shutdownSounds').hidden=true;
+  show('shutdownView');
+}
+document.getElementById('shutdownEntry').onclick=openShutdown;
+document.getElementById('shutdownContinue').onclick=()=>{
+  if(shutdownStep==='threshold'){
+    shutdownStep='sweep';
+    document.getElementById('shutdownLine').textContent='Let the noise thin out.';
+    return;
+  }
+  shutdownStep='still';
+  document.getElementById('shutdownLine').textContent='';
+  document.getElementById('shutdownContinue').hidden=true;
+  document.getElementById('shutdownSounds').hidden=false;
+  renderSounds();
+  playSound(SOUNDS[0]);
+};
+document.getElementById('shutdownLeave').onclick=()=>{stopAmbient();show(null);};
+
+renderFilters();
+Promise.all([storage.read(PAUSED_KEY),storage.read(HELD_KEY),storage.read(BAG_KEY)]).then(([savedPaused,savedHeld,savedBags])=>{
+  paused=new Set(Array.isArray(savedPaused)?savedPaused.filter(id=>SWITCHES.some(item=>item.id===id)):[]);
+  held=Array.isArray(savedHeld)?savedHeld.filter(item=>item&&typeof item.text==='string'):[];
+  bags=savedBags&&typeof savedBags==='object'?savedBags:{};
+  renderBoard();
+});
 </script></body></html>

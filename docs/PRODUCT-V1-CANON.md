@@ -1,6 +1,8 @@
 # Toggle — Product v1 Canon
 
-Status: Current highest-level product canon
+Status: Superseded on September 27, 2026 where it conflicts with `docs/pause-that-build-spec.md`.
+
+Any duration, countdown, or Shutdown clock in this file is void. There are no timers in this product. The build spec wins.
 Working name: Toggle
 Possible later public name: Pause That (not decided, and not a rebrand of this build)
 Platform: iPhone first
