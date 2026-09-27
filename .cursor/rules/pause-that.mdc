@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Pause That
 
-Read `docs/pause-that-build-spec.md` before writing any screen. It is the contract. When it conflicts with `docs/NATIVE-V1-SCOPE.md`, `docs/SHUTDOWN-INTERACTION-SPEC.md`, or `docs/PRODUCT-V1-CANON.md`, the build spec wins.
+Read `docs/pause-that-build-spec.md` before writing any screen. It is the contract. When it conflicts with `docs/NATIVE-V1-SCOPE.md`, `docs/SHUTDOWN-INTERACTION-SPEC.md`, the build spec wins.
 
 Non-negotiable:
 
