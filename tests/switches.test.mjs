@@ -25,6 +25,7 @@ class FakeElement {
   get className() { return [...this.cls].join(' '); }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return this.attrs[k]; }
+  removeAttribute(k) { delete this.attrs[k]; }
   append(...nodes) { nodes.forEach(node => { node.parent = this; this.children.push(node); }); }
   replaceChildren(...nodes) {
     this.children.forEach(child => { child.parent = null; });
@@ -44,8 +45,6 @@ class FakeElement {
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
 async function launch(storage = new Map()) {
-  const listeners = {};
-  const docListeners = {};
   const ids = [
     'home', 'shutdownEntry', 'filterRow', 'pinnedSection', 'pinned', 'mindSection', 'mind', 'boundsSection', 'bounds', 'openHeld',
     'wordsMe', 'wordsMeBack', 'wordsMeLine', 'wordsMeAnother', 'wordsThem', 'wordsThemBack', 'scriptTabs', 'scriptLine',
@@ -61,7 +60,6 @@ async function launch(storage = new Map()) {
         set: async ({ key, value }) => { storage.set(key, value); },
       },
       Haptics: { impact: async ({ style }) => { haptics.push(style); } },
-      App: { addListener: (event, fn) => { listeners[event] = fn; return Promise.resolve({ remove() {} }); } },
       NativeAudio: {
         configure: async () => {},
         preload: async () => {},
@@ -71,10 +69,8 @@ async function launch(storage = new Map()) {
       },
     } } },
     document: {
-      visibilityState: 'visible',
       getElementById: id => els[id],
       createElement: () => new FakeElement(),
-      addEventListener: (event, fn) => { docListeners[event] = fn; },
     },
     localStorage: { getItem: () => null, setItem() {} },
     setTimeout: (fn) => { fn(); return 1; },
@@ -85,11 +81,14 @@ async function launch(storage = new Map()) {
   vm.runInContext(script, context);
   await tick();
   const row = name => els.mind.children.concat(els.bounds.children).find(wrap => wrap.children[0].children[0].children[1].textContent === name);
-  const leave = async () => { listeners.appStateChange({ isActive: false }); await tick(); };
-  const comeBack = async () => { listeners.appStateChange({ isActive: true }); await tick(); };
   const isOff = name => row(name).querySelector('.toggle').classList.contains('off');
   const turnOff = async name => { row(name).querySelector('.toggle').onclick(); await tick(); };
-  return { els, haptics, storage, row, leave, comeBack, isOff, turnOff };
+  const lineOf = name => row(name).children[1].children[0].textContent;
+  const tapAction = async (name, label) => {
+    row(name).children[1].children[2].children.find(node => node.textContent === label).onclick();
+    await tick();
+  };
+  return { els, haptics, storage, row, isOff, turnOff, lineOf, tapAction };
 }
 
 test('turning Overthinking off shows a canonical line and records no time', async () => {
@@ -118,18 +117,38 @@ test('a switch only moves from on to off', async () => {
   assert.deepEqual(app.haptics, ['MEDIUM']);
 });
 
-test('leaving the app and coming back turns every switch back on', async () => {
+test('dismissing the response returns the switch to rest', async () => {
   const app = await launch();
   await app.turnOff('Overthinking');
-  await app.turnOff('Access');
-  await app.comeBack();
-  assert.equal(app.isOff('Overthinking'), true);
-  await app.leave();
-  assert.equal(app.isOff('Overthinking'), true);
-  await app.comeBack();
+  await app.tapAction('Overthinking', "That's enough");
+  const button = app.row('Overthinking').querySelector('.toggle');
   assert.equal(app.isOff('Overthinking'), false);
-  assert.equal(app.isOff('Access'), false);
-  assert.deepEqual(app.haptics, ['MEDIUM', 'MEDIUM']);
+  assert.equal(app.row('Overthinking').children[1].hidden, true);
+  assert.equal(button.getAttribute('aria-disabled'), undefined);
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
+});
+
+test('a rested switch can be turned off again for a fresh line', async () => {
+  const app = await launch();
+  await app.turnOff('Overthinking');
+  const first = app.lineOf('Overthinking');
+  await app.tapAction('Overthinking', "That's enough");
+  await app.turnOff('Overthinking');
+  const second = app.lineOf('Overthinking');
+  assert.equal(app.isOff('Overthinking'), true);
+  assert.equal(app.row('Overthinking').children[1].hidden, false);
+  assert.ok(second.length > 0);
+  assert.notEqual(second, first);
+  assert.deepEqual(app.haptics, ['MEDIUM', 'LIGHT', 'MEDIUM']);
+});
+
+test('opening a follow-up returns the switch to rest', async () => {
+  const app = await launch();
+  await app.turnOff('Overthinking');
+  await app.tapAction('Overthinking', 'Words for me');
+  assert.equal(app.els.wordsMe.hidden, false);
+  assert.equal(app.isOff('Overthinking'), false);
+  assert.equal(app.row('Overthinking').children[1].hidden, true);
 });
 
 test('paused switches are not saved across a relaunch', async () => {

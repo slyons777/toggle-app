@@ -19,7 +19,7 @@ Pause That is an iOS-first app for in-the-moment mental agency. It presents the 
 These override any design instinct. If a feature conflicts with a law, the feature loses.
 
 1. The worse the user feels, the less the app should ask from them. Every screen must be usable by someone mid-spiral with shaking hands.
-2. No timers, ever visible. No duration picker, no countdown, no "back on in 30 minutes," no "Overthinking is back on" message. A switch that was turned off quietly becomes available again later. The reset is silent.
+2. No timers, ever visible. No duration picker, no countdown, no "back on in 30 minutes," no "Overthinking is back on" message. Switches are momentary: a switch turned off drifts back to rest when its response is dismissed. Rest means "available," never "loud."
 3. No engagement mechanics. No streaks, no guilt notifications, no emotional scores, no distress dashboards, no badges, no "you've paused 12 times this week."
 4. "That's enough" always ends the interaction. After a toggle-off, the follow-up offers at most three actions and always includes "That's enough." Tapping it closes everything with no further prompt, no guilt, no upsell, no "are you sure."
 5. Laugh with the user, never at the user. The Unfiltered voice is dry, funny, blunt, occasionally profane. It is never cruel and never punches down at the person using the app.
@@ -61,7 +61,7 @@ Type scale (iOS points): display 34/40 bold for screen titles, 20/26 semibold fo
 
 Corner radius: 16–20pt cards, 12pt rows and buttons, fully rounded (pill) toggles and primary buttons. Touchpoints stay soft and familiar; the brutalist structure (hairlines, mono labels, grain) carries the distinctiveness, not the control shapes.
 
-The switch is a familiar pill toggle with a sliding thumb and solid fill, iPhone Settings style, in our own palette: cream (`accent`) filled when ON (the pattern is loud and active), quiet warm gray when OFF (paused). No mid-throw line, no invented slider track. Familiarity is the point: a distressed user never learns a new control.
+The switch is a familiar pill toggle with a sliding thumb and solid fill, iPhone Settings style, in our own palette: cream (`accent`) filled at rest (available, not loud), quiet warm gray while OFF. No mid-throw line, no invented slider track. Familiarity is the point: a distressed user never learns a new control.
 
 Row height for switches: 64pt minimum touch target, generous padding.
 
@@ -82,7 +82,7 @@ Layout from top to bottom:
 
 A category filter sits above the groups: All / Mind Alerts / Boundaries chips (segmented control, no label needed). Tapping one narrows the visible switch rows; pinned shortcuts keep working across filtered views. This is recognition-based on purpose: no free-text search in v1, because search demands recall (remembering exact toggle names) at the moment recall is hardest, and a "no results" dead end tells a spiraling person their feeling "doesn't exist." If search is ever added, it needs a curated synonym map and a no-match state that suggests rather than rejects.
 
-Each row: line icon, name, custom switch (starts ON). Switches are familiar pill toggles: cream filled when ON (the pattern is loud and active), quiet warm gray when OFF (paused), with a sliding thumb.
+Each row: line icon, name, custom switch (always starts at rest). Switches are familiar pill toggles: cream filled at rest (available, not loud), quiet warm gray while OFF, with a sliding thumb.
 
 Switch icons use the most universal metaphor for each pattern, all in one consistent rounded-stroke style (SF-Symbols-like weight, no filled/outline mix). Depict the pattern, not the solution:
 
@@ -103,12 +103,14 @@ Switch icons use the most universal metaphor for each pattern, all in one consis
 
 This is the product. Get this exactly right before building anything else.
 
+The toggle is an instrument, not a mirror: it performs the act of setting a pattern down. It does not report the user's mental state, and the board never presumes what is loud right now.
+
 1. User taps a switch to turn it OFF.
 2. The switch animates over 400–800ms with a settling ease (ease-out, no spring bounce), plus a soft haptic. The row dims.
 3. Inline, directly under the row label (no modal, no banner, no new screen), one response line fades in. The line is drawn from that switch's rotating pool: pick randomly, never repeat until the pool is exhausted, then reshuffle. The line renders with no quotation marks: it is the app speaking directly to the user, not quoted speech.
 4. Below the line: "What do you need?" with at most three contextual actions. The actions depend on the switch (e.g. Words for me, Hold this, Words for them). One of the three is always "That's enough."
 5. Tapping "That's enough" closes the inline block silently. No confirmation, no follow-up, no guilt.
-6. Later, with no announcement, the switch quietly becomes available again. There is no visible timer and no "back on" messaging. Ever.
+6. The OFF state lives exactly as long as the inline response is visible. When the response is dismissed ("That's enough," a follow-up, or navigating away), the switch drifts back to rest with a gentle animation (instant under Reduce Motion). Rest means "available," not "loud." The user only ever moves a switch in one direction: ON to OFF. There is no visible timer and no "back on" messaging. Ever.
 
 ### 4c. Words for Me
 
@@ -289,7 +291,7 @@ Note: every pool ships in three voice variants in v1 (Soft, Straight, Unfiltered
 
 Keep it boring and local-first. No account, no backend in v1. The native-ios branch is Capacitor, not SwiftUI. Persist with Capacitor Preferences. The shape below is the model, not a SwiftData requirement.
 
-- MentalSwitch: id, name, iconName, group (mindAlerts/boundaries), isPinned, isAvailable (the quiet reset flips this; no timestamp shown to the user), sortOrder.
+- MentalSwitch: id, name, iconName, group (mindAlerts/boundaries), isPinned, sortOrder. Switch state is never persisted: the OFF state exists only while its inline response is on screen.
 - SwitchResponse: id, switchId, text, timesShown, lastShownAt. Rotation logic: least-recently-shown first, reshuffle when all shown.
 - VoiceSetting: currentVoice (soft/straight/unfiltered). One row.
 - HeldThought: id, text, createdAt, switchId (optional). Never surfaced except on explicit request. No notifications touch this table.
@@ -312,7 +314,7 @@ One-time full unlock, no subscription. Target around $19.99. The free tier must 
 Canonical stack (locked Sep 27, 2026): the native-ios branch is a Capacitor app, a native iOS shell around the web app in `www/`, with Capacitor plugins for haptics, preferences, and native audio. It is not SwiftUI. Build everything below as web components and CSS in `www/`; reach for native plugins only for haptics, persistence, and audio.
 
 1. Design tokens as CSS custom properties in `www/`: colors, fonts, spacing, radii (section 3). The app cannot look right until this exists; do not build screens first.
-2. The toggle as a reusable web component: familiar pill, cream-filled when ON, quiet warm gray when OFF, sliding thumb, haptic via the Capacitor haptics plugin, Reduce Motion path.
+2. The toggle as a reusable web component: familiar pill, cream-filled at rest (rest means available, not loud), quiet warm gray while OFF, sliding thumb, momentary return to rest when the response is dismissed, haptic via the Capacitor haptics plugin, Reduce Motion path.
 3. The inline response row: dim, expand, rotating line, "What do you need?" with max three actions including "That's enough."
 4. Home switchboard with the 12 switches in their two groups.
 5. Words for Me, then Words for Them, then Hold This.
@@ -321,7 +323,7 @@ Canonical stack (locked Sep 27, 2026): the native-ios branch is a Capacitor app,
 8. Onboarding (last; it is two screens and depends on nothing).
 9. Widget, if cheap; otherwise v1.1.
 
-Build vertically: one switch end-to-end (Overthinking: toggle, response, "What do you need?", That's enough, quiet reset) before cloning to twelve.
+Build vertically: one switch end-to-end (Overthinking: toggle, response, "What do you need?", That's enough, return to rest) before cloning to twelve.
 
 Note: the repo's native-ios branch previously contained a timer-based design (durations, wall-clock expirations, timer tests, duration-based Shutdown). That direction was superseded on Sep 27, 2026. See the Sep 27 repo rework brief for the removal checklist Cursor must execute before new work begins.
 
