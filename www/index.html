@@ -206,17 +206,19 @@ const SOUNDS=[
   {id:'ocean',name:'Ocean',file:'audio/ocean.wav'},
   {id:'quiet',name:'Quiet',file:null}
 ];
-const PAUSED_KEY='toggle.paused.v1';
 const HELD_KEY='toggle.held.v1';
 const BAG_KEY='toggle.response-bag.v1';
 const plugins=(window.Capacitor&&window.Capacitor.Plugins)||{};
 const Preferences=plugins.Preferences;
 const Haptics=plugins.Haptics;
+const App=plugins.App;
 const NativeAudio=plugins.NativeAudio;
 const home=document.getElementById('home');
 const mind=document.getElementById('mind');
 const bounds=document.getElementById('bounds');
+// Paused switches live only for this visit. Leaving the app and coming back turns them all back on.
 let paused=new Set();
+let away=false;
 let bags={};
 let held=[];
 let filter='all';
@@ -288,25 +290,35 @@ function makeRow(item){
   return wrap;
 }
 
+function markOff(row,button){
+  button.classList.add('off');
+  row.classList.add('off');
+  button.setAttribute('aria-pressed','false');
+  button.setAttribute('aria-disabled','true');
+}
+
 function toggleSwitch(item,row,button,response,copy){
-  const turningOff=!button.classList.contains('off');
-  if(turningOff){
-    button.classList.add('off','release');
-    row.classList.add('off');
-    paused.add(item.id);
-    copy.textContent=nextLine(item.id,item.lines);
-    response.hidden=false;
-    haptic('MEDIUM');
-    setTimeout(()=>button.classList.remove('release'),700);
-  }else{
-    button.classList.remove('off','release');
-    row.classList.remove('off');
-    paused.delete(item.id);
-    response.hidden=true;
-    haptic('LIGHT');
-  }
-  button.setAttribute('aria-pressed',String(!turningOff));
-  storage.write(PAUSED_KEY,[...paused]);
+  if(paused.has(item.id))return;
+  paused.add(item.id);
+  markOff(row,button);
+  button.classList.add('release');
+  copy.textContent=nextLine(item.id,item.lines);
+  response.hidden=false;
+  haptic('MEDIUM');
+  setTimeout(()=>button.classList.remove('release'),700);
+}
+
+function leaveApp(){
+  away=true;
+}
+
+function returnToApp(){
+  if(!away)return;
+  away=false;
+  paused.clear();
+  activeSwitch=null;
+  if(document.getElementById('shutdownView').hidden)show(null);
+  renderBoard();
 }
 
 function follow(item,label,response){
@@ -401,11 +413,7 @@ function renderBoard(){
     if(filter==='bounds'&&item.group!=='bounds')return;
     const wrap=makeRow(item);
     (item.group==='mind'?mind:bounds).append(wrap);
-    if(paused.has(item.id)){
-      const button=wrap.querySelector('.toggle');
-      button.classList.add('off');
-      wrap.querySelector('.row').classList.add('off');
-    }
+    if(paused.has(item.id))markOff(wrap.querySelector('.row'),wrap.querySelector('.toggle'));
   });
   document.getElementById('mindSection').hidden=filter==='bounds';
   document.getElementById('boundsSection').hidden=filter==='mind';
@@ -497,8 +505,10 @@ document.getElementById('shutdownContinue').onclick=()=>{
 document.getElementById('shutdownLeave').onclick=()=>{stopAmbient();show(null);};
 
 renderFilters();
-Promise.all([storage.read(PAUSED_KEY),storage.read(HELD_KEY),storage.read(BAG_KEY)]).then(([savedPaused,savedHeld,savedBags])=>{
-  paused=new Set(Array.isArray(savedPaused)?savedPaused.filter(id=>SWITCHES.some(item=>item.id===id)):[]);
+if(App)App.addListener('appStateChange',state=>{if(state.isActive)returnToApp();else leaveApp();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')leaveApp();else returnToApp();});
+
+Promise.all([storage.read(HELD_KEY),storage.read(BAG_KEY)]).then(([savedHeld,savedBags])=>{
   held=Array.isArray(savedHeld)?savedHeld.filter(item=>item&&typeof item.text==='string'):[];
   bags=savedBags&&typeof savedBags==='object'?savedBags:{};
   renderBoard();
